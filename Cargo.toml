@@ -6,10 +6,11 @@ description = "A minimal Markdown viewer"
 license = "MIT"
 
 [dependencies]
-eframe = "0.36"
-egui_commonmark = { version = "0.25", features = ["better_syntax_highlighting", "svg", "fetch", "embedded_image"] }
+ammonia = "4.2.3"
+comrak = { version = "0.56.0", default-features = false, features = ["syntect-fancy"] }
 ignore = "0.4.33"
-image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp"] }
+tao = "0.37.1"
+wry = "0.57.0"
 
 [profile.release]
 lto = true
