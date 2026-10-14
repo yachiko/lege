@@ -24,17 +24,44 @@ use wry::{DragDropEvent, NewWindowResponse, WebView, WebViewBuilder};
 
 use server::{ORIGIN, State};
 
+const USAGE: &str = "\
+lege — a minimal Markdown viewer and explorer
+
+Usage: lege [FILE.md | DIR]
+
+  FILE.md   view a Markdown file
+  DIR       browse a folder of Markdown files
+  (none)    open an empty window; drop a file or folder onto it
+
+Options:
+  -h, --help     print this help
+  -V, --version  print the version
+";
+
 enum UserEvent {
     Open(PathBuf),
     Quit,
 }
 
 fn main() {
+    let arg = std::env::args_os().nth(1);
+    match arg.as_ref().and_then(|a| a.to_str()) {
+        Some("-h" | "--help") => {
+            print!("{USAGE}");
+            return;
+        }
+        Some("-V" | "--version") => {
+            println!("lege {}", env!("CARGO_PKG_VERSION"));
+            return;
+        }
+        _ => {}
+    }
+
     // Load syntax highlighting while the window comes up.
     std::thread::spawn(render::warm_up);
 
     let state = Arc::new(State::default());
-    let start = match std::env::args_os().nth(1) {
+    let start = match arg {
         Some(arg) => target_url(Path::new(&arg), &state).unwrap_or_else(|e| {
             eprintln!("lege: {e}");
             std::process::exit(1);
@@ -43,6 +70,8 @@ fn main() {
     };
 
     let event_loop = EventLoopBuilder::<UserEvent>::with_user_event().build();
+    #[cfg(target_os = "macos")]
+    let menu = macos_menu();
     let proxy = event_loop.create_proxy();
     let window = Rc::new(
         WindowBuilder::new()
@@ -99,6 +128,8 @@ fn main() {
     let webview = build_webview(builder, &window).expect("failed to create webview");
 
     event_loop.run(move |event, _, control_flow| {
+        #[cfg(target_os = "macos")]
+        let _keep_menu_alive = &menu;
         *control_flow = ControlFlow::Wait;
         match event {
             Event::WindowEvent {
@@ -170,6 +201,59 @@ fn open_externally(target: &str) {
         }
         Err(e) => eprintln!("lege: cannot open {target}: {e}"),
     }
+}
+
+/// macOS delivers Copy, Paste and Select All to a webview only through the
+/// app's Edit menu, so lege needs a minimal menu bar there. The returned menu
+/// must be kept alive.
+#[cfg(target_os = "macos")]
+fn macos_menu() -> muda::Menu {
+    use muda::{AboutMetadata, Menu, PredefinedMenuItem as Item, Submenu};
+
+    let about = AboutMetadata {
+        name: Some("Lege".to_owned()),
+        version: Some(env!("CARGO_PKG_VERSION").to_owned()),
+        ..Default::default()
+    };
+    let app = Submenu::with_items(
+        "Lege",
+        true,
+        &[
+            &Item::about(None, Some(about)),
+            &Item::separator(),
+            &Item::hide(None),
+            &Item::hide_others(None),
+            &Item::show_all(None),
+            &Item::separator(),
+            &Item::quit(None),
+        ],
+    );
+    let edit = Submenu::with_items(
+        "Edit",
+        true,
+        &[
+            &Item::undo(None),
+            &Item::redo(None),
+            &Item::separator(),
+            &Item::cut(None),
+            &Item::copy(None),
+            &Item::paste(None),
+            &Item::select_all(None),
+        ],
+    );
+    let window = Submenu::with_items(
+        "Window",
+        true,
+        &[
+            &Item::minimize(None),
+            &Item::fullscreen(None),
+            &Item::close_window(None),
+        ],
+    );
+    let (app, edit, window) = (app.unwrap(), edit.unwrap(), window.unwrap());
+    let menu = Menu::with_items(&[&app, &edit, &window]).expect("failed to build the menu bar");
+    menu.init_for_nsapp();
+    menu
 }
 
 #[cfg(not(target_os = "linux"))]
