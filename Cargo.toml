@@ -5,6 +5,11 @@ edition = "2024"
 description = "A minimal Markdown viewer"
 license = "MIT"
 
+# The project is lector; the command is short for speed of typing.
+[[bin]]
+name = "lege"
+path = "src/main.rs"
+
 [dependencies]
 ammonia = "4.2.3"
 comrak = { version = "0.56.0", default-features = false, features = ["syntect-fancy"] }

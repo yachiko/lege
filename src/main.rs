@@ -1,6 +1,6 @@
 //! lector — a minimal Markdown viewer and explorer.
 //!
-//! Usage: `lector [FILE.md | DIR]`, or drop a file or folder onto the window.
+//! Usage: `lege [FILE.md | DIR]`, or drop a file or folder onto the window.
 //! A directory opens with a sidebar listing its Markdown files. The open file
 //! reloads automatically when it changes on disk.
 //!
@@ -32,7 +32,7 @@ fn main() {
     let root: Root = Arc::new(Mutex::new(None));
     let start = match std::env::args_os().nth(1) {
         Some(arg) => target_url(Path::new(&arg), &root).unwrap_or_else(|e| {
-            eprintln!("lector: {e}");
+            eprintln!("lege: {e}");
             std::process::exit(1);
         }),
         None => format!("{ORIGIN}/"),
@@ -101,7 +101,7 @@ fn main() {
                 Ok(url) => {
                     let _ = webview.load_url(&url);
                 }
-                Err(e) => eprintln!("lector: {e}"),
+                Err(e) => eprintln!("lege: {e}"),
             },
             _ => {}
         }
@@ -160,7 +160,7 @@ fn open_externally(target: &str) {
         Ok(mut child) => {
             std::thread::spawn(move || child.wait());
         }
-        Err(e) => eprintln!("lector: cannot open {target}: {e}"),
+        Err(e) => eprintln!("lege: cannot open {target}: {e}"),
     }
 }
 

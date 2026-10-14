@@ -1,8 +1,9 @@
-# lector — common tasks. Run `make help` for the list.
+# lector (command: lege) — common tasks. Run `make help` for the list.
 
 CARGO  ?= cargo
 PYTHON ?= python3
 PREFIX ?= $(HOME)/.local
+BIN    := lege
 
 VERSION := $(shell sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)
 TARGET  := $(shell rustc -vV | sed -n 's/^host: //p')
@@ -33,20 +34,20 @@ release: lint test ## Optimized build, packaged into dist/
 	$(CARGO) build --release --locked
 	rm -rf $(DIST)/$(NAME)
 	mkdir -p $(DIST)/$(NAME)
-	cp target/release/lector README.md $(DIST)/$(NAME)/
-	cp target/release/lector $(DIST)/lector
+	cp target/release/$(BIN) README.md $(DIST)/$(NAME)/
+	cp target/release/$(BIN) $(DIST)/$(BIN)
 	tar -czf $(DIST)/$(NAME).tar.gz -C $(DIST) $(NAME)
 	cd $(DIST) && $(SHA256) $(NAME).tar.gz > $(NAME).tar.gz.sha256
 	rm -rf $(DIST)/$(NAME)
 	@echo
-	@ls -lh $(DIST)/lector $(DIST)/$(NAME).tar.gz | awk '{print "  " $$5 "\t" $$9}'
+	@ls -lh $(DIST)/$(BIN) $(DIST)/$(NAME).tar.gz | awk '{print "  " $$5 "\t" $$9}'
 
-install: release ## Install the release build to $(PREFIX)/bin
+install: release ## Install lege to $(PREFIX)/bin
 	mkdir -p $(PREFIX)/bin
-	install -m 755 $(DIST)/lector $(PREFIX)/bin/lector
+	install -m 755 $(DIST)/$(BIN) $(PREFIX)/bin/$(BIN)
 
-uninstall: ## Remove lector from $(PREFIX)/bin
-	rm -f $(PREFIX)/bin/lector
+uninstall: ## Remove lege from $(PREFIX)/bin
+	rm -f $(PREFIX)/bin/$(BIN)
 
 testdata: ## Generate test documents in testdata/ (HUGE_MB=10 MANY=2000)
 	$(PYTHON) scripts/gen_testdata.py testdata --huge-mb $(or $(HUGE_MB),10) --many $(or $(MANY),2000)
