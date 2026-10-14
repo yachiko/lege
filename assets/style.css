@@ -22,9 +22,10 @@
 
   --sidebar-width: 260px;
   --sidebar-bg: #e9eaed;
-  --sidebar-ink: #2b2f36;
+  --sidebar-ink: #24282f;
+  --sidebar-muted: #4f555e;
   --sidebar-hover: rgb(0 0 0 / 0.05);
-  --sidebar-current: #cfdbf0;
+  --sidebar-guide: rgb(0 0 0 / 0.13);
   --scroll-thumb: rgb(0 0 0 / 0.22);
 
   --note: #0969da;
@@ -57,9 +58,10 @@
     --mark: #5c4d12;
 
     --sidebar-bg: #18191c;
-    --sidebar-ink: #c4c7cc;
+    --sidebar-ink: #d6d9de;
+    --sidebar-muted: #9ca2aa;
     --sidebar-hover: rgb(255 255 255 / 0.05);
-    --sidebar-current: #263650;
+    --sidebar-guide: rgb(255 255 255 / 0.13);
     --scroll-thumb: rgb(255 255 255 / 0.18);
 
     --note: #4493f8;
@@ -109,10 +111,10 @@ body {
   box-sizing: border-box;
   width: var(--sidebar-width);
   overflow: auto;
-  padding: 12px 8px 32px;
+  padding: 0 8px 32px;
   background: var(--sidebar-bg);
   border-right: 1px solid var(--rule-strong);
-  font: 13px/1.45 var(--sans);
+  font: 13.5px/18px var(--sans);
   transition: transform 0.18s ease;
 }
 
@@ -164,16 +166,33 @@ body.resizing, body.resizing * { cursor: col-resize; user-select: none; transiti
 
 /* ---------- Sidebar tree ---------- */
 
+/* The browsed folder's name, pinned while the tree scrolls. */
+#sidebar header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0 -8px 4px;
+  padding: 14px 18px 8px;
+  background: var(--sidebar-bg);
+  color: var(--muted);
+  font-weight: 600;
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 #sidebar ul { list-style: none; margin: 0; padding: 0; }
 #sidebar li, #sidebar details { margin: 0; }
-#sidebar ul ul { padding-left: 12px; }
 
+/* Rows are 26px; file names line up with folder names after the chevron. */
 #sidebar a,
 #sidebar summary {
   display: block;
-  padding: 3px 8px 3px 19px;
+  padding: 4px 10px 4px 21px;
   border-radius: 5px;
-  color: var(--sidebar-ink);
+  color: var(--sidebar-muted);
   text-decoration: none;
   white-space: nowrap;
   overflow: hidden;
@@ -181,23 +200,52 @@ body.resizing, body.resizing * { cursor: col-resize; user-select: none; transiti
   cursor: default;
 }
 
-#sidebar summary { list-style: none; padding-left: 8px; }
+#sidebar summary {
+  padding-left: 9px;
+  color: var(--sidebar-ink);
+  font-weight: 550;
+  list-style: none;
+}
 #sidebar summary::-webkit-details-marker { display: none; }
 #sidebar summary::before {
   content: "";
   display: inline-block;
-  margin: 0 6px 1px 1px;
+  margin: 0 7px 1px 1px;
   border-left: 4px solid currentColor;
   border-top: 3.5px solid transparent;
   border-bottom: 3.5px solid transparent;
-  opacity: 0.5;
+  opacity: 0.45;
   transition: transform 0.12s ease;
 }
 #sidebar details[open] > summary::before { transform: rotate(90deg); }
 
+/* Indent guide: a hairline running down from each open folder's chevron. */
+#sidebar details > ul {
+  margin-left: 12px;
+  border-left: 1px solid var(--sidebar-guide);
+}
+
 #sidebar a:hover,
-#sidebar summary:hover { background: var(--sidebar-hover); }
-#sidebar a[aria-current] { background: var(--sidebar-current); font-weight: 600; }
+#sidebar summary:hover { background: var(--sidebar-hover); color: var(--sidebar-ink); }
+
+/* The open file: an accent bar down its row and its outline, and a light tint. */
+#sidebar li.current { box-shadow: inset 2px 0 0 var(--link); }
+#sidebar a[aria-current] {
+  border-radius: 0 5px 5px 0;
+  background: color-mix(in srgb, var(--link) 13%, transparent);
+  color: var(--sidebar-ink);
+  font-weight: 550;
+}
+
+/* The open document's sections, under its file. */
+#sidebar .outline { padding-bottom: 4px; }
+#sidebar .outline a {
+  padding: 3px 10px 3px 33px;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 17px;
+}
+#sidebar .outline a.active { color: var(--link); font-weight: 550; }
 
 /* ---------- Document ---------- */
 

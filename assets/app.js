@@ -115,21 +115,103 @@
 
   function markCurrent(reveal) {
     let current = null;
-    for (const link of sidebar.querySelectorAll('a[href]')) {
+    for (const link of sidebar.querySelectorAll('a[href]:not(.heading)')) {
       const isCurrent = samePath(new URL(link.href).pathname, location.pathname);
       link.toggleAttribute('aria-current', isCurrent);
+      link.parentElement.classList.toggle('current', isCurrent);
       if (isCurrent) current = link;
     }
+    buildOutline(current);
     if (!current || !reveal) return;
     for (let el = current.parentElement; el && el !== sidebar; el = el.parentElement) {
       if (el.tagName === 'DETAILS') el.open = true;
     }
-    // Scroll only the sidebar; scrollIntoView would also move the document.
-    const top = current.offsetTop; // relative to the sidebar, its offsetParent
-    if (top < sidebar.scrollTop || top + current.offsetHeight > sidebar.scrollTop + sidebar.clientHeight) {
-      sidebar.scrollTop = top - sidebar.clientHeight / 3;
+    revealInSidebar(current, 1 / 3);
+  }
+
+  // Scrolls only the sidebar (scrollIntoView would also move the document),
+  // placing `el` at `position` of its height if it is out of view.
+  function revealInSidebar(el, position) {
+    const header = sidebar.querySelector('header')?.offsetHeight ?? 0;
+    const top = el.offsetTop; // relative to the sidebar, its offsetParent
+    const visibleTop = sidebar.scrollTop + header;
+    const visibleBottom = sidebar.scrollTop + sidebar.clientHeight;
+    if (top < visibleTop || top + el.offsetHeight > visibleBottom) {
+      sidebar.scrollTop = top - header - (sidebar.clientHeight - header) * position;
     }
   }
+
+  // ---------- Outline ----------
+  // The open document's sections, listed under its file in the sidebar,
+  // with the one being read highlighted.
+
+  let headings = [];
+  let outlineLinks = [];
+  let activeIndex = -1;
+
+  function buildOutline(current) {
+    sidebar.querySelector('.outline')?.remove();
+    headings = [...page.querySelectorAll('h2[id]')];
+    outlineLinks = [];
+    activeIndex = -1;
+    if (!current || headings.length === 0) return;
+
+    const list = document.createElement('ul');
+    list.className = 'outline';
+    for (const heading of headings) {
+      const link = document.createElement('a');
+      link.className = 'heading';
+      link.href = `#${encodeURIComponent(heading.id)}`;
+      link.textContent = link.title = heading.textContent.trim();
+      const item = document.createElement('li');
+      item.append(link);
+      list.append(item);
+      outlineLinks.push(link);
+    }
+    current.after(list);
+    updateActive();
+  }
+
+  // The active section is the last heading above a line near the top of the
+  // window. Headings are in document order, so binary search keeps this cheap
+  // even for documents with thousands of sections.
+  function updateActive() {
+    if (headings.length === 0) return;
+    const line = 96;
+    let lo = 0;
+    let hi = headings.length - 1;
+    let found = -1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (headings[mid].getBoundingClientRect().top <= line) {
+        found = mid;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    // Short last sections never reach the line; scrolled to the end means the last one.
+    const atEnd = window.scrollY > 0 && window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2;
+    if (atEnd) found = headings.length - 1;
+    if (found === activeIndex) return;
+
+    outlineLinks[activeIndex]?.classList.remove('active');
+    activeIndex = found;
+    const link = outlineLinks[found];
+    if (!link) return;
+    link.classList.add('active');
+    if (!body.classList.contains('sidebar-hidden')) revealInSidebar(link, 1 / 2);
+  }
+
+  let spyQueued = false;
+  window.addEventListener('scroll', () => {
+    if (spyQueued) return;
+    spyQueued = true;
+    requestAnimationFrame(() => {
+      spyQueued = false;
+      updateActive();
+    });
+  }, { passive: true });
 
   // Pick up added or removed files when coming back to the window,
   // keeping the folders that were open.

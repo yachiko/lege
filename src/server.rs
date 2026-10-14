@@ -93,10 +93,21 @@ fn notice(message: &str) -> String {
     format!(r#"<p class="notice">{}</p>"#, escape(message))
 }
 
+/// The browsed folder's name as a header, then its file tree.
 fn sidebar(root: &Root) -> String {
-    let root = root.lock().unwrap().clone();
-    root.map(|root| tree::to_html(&tree::scan(&root)))
-        .unwrap_or_default()
+    let Some(root) = root.lock().unwrap().clone() else {
+        return String::new();
+    };
+    let full = root.to_string_lossy();
+    let name = root
+        .file_name()
+        .map_or(full.clone(), |n| n.to_string_lossy());
+    format!(
+        r#"<header title="{}">{}</header>{}"#,
+        escape(&full),
+        escape(&name),
+        tree::to_html(&tree::scan(&root))
+    )
 }
 
 fn mtime(path: &Path) -> String {
