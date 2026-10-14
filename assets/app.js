@@ -28,6 +28,11 @@
 
   let mtime = body.dataset.mtime;
   let shownPath = location.pathname;
+  // Bumped on every document load, so a superseded load stops adding shards.
+  let loadToken = 0;
+  // Where to scroll once enough of a progressively loading document is in.
+  let pendingScroll = null;
+  let pendingHash = '';
 
   const decode = (path) => {
     try { return decodeURIComponent(path); } catch { return path; }
@@ -46,21 +51,70 @@
     }
     if (!response.ok) return;
     const html = await response.text();
+    const shards = Number(response.headers.get('X-Shards')) || 1;
 
     if (push) {
       history.replaceState({ scroll: window.scrollY }, '');
       history.pushState({}, '', url.pathname + url.hash);
     }
+    const token = ++loadToken;
     page.innerHTML = html;
     shownPath = url.pathname;
     const name = decode(url.pathname).split('/').pop();
     document.title = `${name} — lector`;
-    mtime = await fetchMtime();
 
-    if (scroll !== null) window.scrollTo(0, scroll);
-    else if (url.hash) scrollToHash(url.hash);
-    else window.scrollTo(0, 0);
+    pendingScroll = scroll;
+    pendingHash = scroll === null ? url.hash : '';
+    if (scroll === null && !url.hash) window.scrollTo(0, 0);
     markCurrent(true);
+    settleScroll();
+    loadShards(url.pathname, shards, token);
+    mtime = await fetchMtime();
+  }
+
+  // Large documents arrive in shards: the first comes with the page, the
+  // rest are appended one per task, so the page paints and stays responsive
+  // as it grows. The next shard is fetched while the current one goes in.
+  async function loadShards(path, total, token) {
+    const fetchShard = (i) =>
+      fetch(`${path}?shard=${i}`).then((r) => (r.ok ? r.text() : '')).catch(() => '');
+    let next = total > 1 ? fetchShard(1) : null;
+    for (let i = 1; i < total; i++) {
+      const html = await next;
+      if (token !== loadToken) return;
+      if (i + 1 < total) next = fetchShard(i + 1);
+      if (html) {
+        page.insertAdjacentHTML('beforeend', html);
+        extendOutline(page.lastElementChild);
+        settleScroll();
+      }
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    if (token === loadToken && pendingScroll !== null) {
+      window.scrollTo(0, pendingScroll);
+      pendingScroll = null;
+    }
+  }
+
+  // Scrolls to the pending position or #anchor once its content has arrived.
+  function settleScroll() {
+    const height = document.documentElement.scrollHeight;
+    if (pendingScroll !== null && height >= pendingScroll + window.innerHeight) {
+      window.scrollTo(0, pendingScroll);
+      pendingScroll = null;
+    }
+    if (pendingHash && document.getElementById(decode(pendingHash.slice(1)))) {
+      scrollToHash(pendingHash);
+      pendingHash = '';
+    }
+  }
+
+  // Scrolling by hand while a document loads cancels any pending jump.
+  for (const type of ['wheel', 'touchmove', 'keydown', 'mousedown']) {
+    window.addEventListener(type, () => {
+      pendingScroll = null;
+      pendingHash = '';
+    }, { passive: true });
   }
 
   async function fetchMtime() {
@@ -105,7 +159,9 @@
 
   window.addEventListener('popstate', (event) => {
     if (samePath(location.pathname, shownPath)) {
-      if (location.hash) scrollToHash(location.hash);
+      // The target may be in a shard that hasn't arrived yet.
+      pendingHash = location.hash;
+      settleScroll();
       return;
     }
     show(new URL(location.href), { scroll: event.state?.scroll ?? null });
@@ -145,30 +201,39 @@
   // The open document's sections, listed under its file in the sidebar,
   // with the one being read highlighted.
 
+  let outline = null;
   let headings = [];
   let outlineLinks = [];
   let activeIndex = -1;
 
   function buildOutline(current) {
     sidebar.querySelector('.outline')?.remove();
-    headings = [...page.querySelectorAll('h2[id]')];
+    outline = null;
+    headings = [];
     outlineLinks = [];
     activeIndex = -1;
-    if (!current || headings.length === 0) return;
+    if (!current) return;
 
-    const list = document.createElement('ul');
-    list.className = 'outline';
-    for (const heading of headings) {
+    outline = document.createElement('ul');
+    outline.className = 'outline';
+    current.after(outline);
+    extendOutline(page);
+  }
+
+  // Adds the sections in `container` (the page, or a newly arrived shard).
+  function extendOutline(container) {
+    if (!outline || !container) return;
+    for (const heading of container.querySelectorAll('h2[id]')) {
       const link = document.createElement('a');
       link.className = 'heading';
       link.href = `#${encodeURIComponent(heading.id)}`;
       link.textContent = link.title = heading.textContent.trim();
       const item = document.createElement('li');
       item.append(link);
-      list.append(item);
+      outline.append(item);
+      headings.push(heading);
       outlineLinks.push(link);
     }
-    current.after(list);
     updateActive();
   }
 
@@ -312,7 +377,9 @@
   setSidebarWidth(prefs.get('sidebarWidth', 260));
   if (prefs.get('sidebarHidden', false)) body.classList.add('sidebar-hidden');
   markCurrent(true);
-  if (location.hash) scrollToHash(location.hash);
+  pendingHash = location.hash;
+  settleScroll();
+  loadShards(location.pathname, Number(body.dataset.shards) || 1, ++loadToken);
   // Restored sidebar state shouldn't animate in; enable transitions after the first paint.
   requestAnimationFrame(() => requestAnimationFrame(() => body.classList.remove('booting')));
 })();

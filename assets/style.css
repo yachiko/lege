@@ -252,6 +252,7 @@ body.resizing, body.resizing * { cursor: col-resize; user-select: none; transiti
 }
 
 /* The open document's sections, hanging off its card on an accent line. */
+#sidebar .outline:empty { display: none; }
 #sidebar .outline {
   margin: 2px 0 10px 12px;
   border-left: 2px solid color-mix(in srgb, var(--link) 50%, transparent);
@@ -267,8 +268,14 @@ body.resizing, body.resizing * { cursor: col-resize; user-select: none; transiti
 
 /* ---------- Document ---------- */
 
-#page > :first-child { margin-top: 0; }
-#page > :last-child { margin-bottom: 0; }
+/* Documents arrive in shards. Off-screen shards skip layout and painting,
+   which keeps very large documents responsive. */
+.shard {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 1500px;
+}
+.shard:first-child > :first-child { margin-top: 0; }
+.shard:last-child > :last-child { margin-bottom: 0; }
 #page [id] { scroll-margin-top: 24px; }
 
 h1, h2, h3, h4, h5, h6 {

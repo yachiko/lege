@@ -5,7 +5,10 @@
 //! disk. Routes:
 //!
 //! - `/path/to/doc.md` — the full viewer page with that document
-//! - `/path/to/doc.md?content` — just the rendered document, for in-page navigation
+//! - `/path/to/doc.md?content` — the document's first shard, for in-page
+//!   navigation; the `X-Shards` header says how many there are
+//! - `/path/to/doc.md?shard=N` — shard N; large documents arrive in shards
+//!   (see `render::split`) that the page appends as they come
 //! - `/path/to/doc.md?mtime` — the file's modification time, polled for live reload
 //! - `/_lector/*` — the viewer's own assets, and the sidebar tree
 //! - any other path — the file's bytes, e.g. images
@@ -17,8 +20,8 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use wry::http::{Request, Response, header::CONTENT_TYPE};
@@ -41,14 +44,55 @@ const PREFETCH_MAX_BYTES: u64 = 1024 * 1024;
 pub struct State {
     /// The directory shown in the sidebar, if lector is browsing one.
     root: Mutex<Option<PathBuf>>,
-    rendered: Mutex<HashMap<PathBuf, Rendered>>,
+    documents: Mutex<HashMap<PathBuf, Arc<Document>>>,
     /// Bumped whenever the root changes, so a stale prefetch stops early.
     generation: AtomicU64,
 }
 
-struct Rendered {
+/// A file split into shards, each rendered on first use.
+struct Document {
     modified: SystemTime,
-    html: Arc<str>,
+    sources: Vec<String>,
+    shards: Vec<OnceLock<Arc<str>>>,
+    /// Set when a newer version of the file replaces this one.
+    stale: AtomicBool,
+}
+
+impl Document {
+    fn len(&self) -> usize {
+        self.sources.len()
+    }
+
+    /// Shard `i` as HTML, rendering it now unless another thread has (or is).
+    fn shard(&self, i: usize) -> Option<Arc<str>> {
+        let source = self.sources.get(i)?;
+        let html = self.shards[i].get_or_init(|| {
+            format!(r#"<div class="shard">{}</div>"#, render::markdown(source)).into()
+        });
+        Some(html.clone())
+    }
+
+    /// Renders every shard after the first, in parallel. The first is left to
+    /// whoever asked for the document, so it isn't queued behind the rest.
+    fn render_rest(&self) {
+        let next = AtomicUsize::new(1);
+        let workers = std::thread::available_parallelism()
+            .map_or(2, |n| n.get())
+            .min(self.len() - 1);
+        std::thread::scope(|scope| {
+            for _ in 0..workers {
+                scope.spawn(|| {
+                    loop {
+                        let i = next.fetch_add(1, Ordering::Relaxed);
+                        if i >= self.len() || self.stale.load(Ordering::Relaxed) {
+                            break;
+                        }
+                        self.shard(i);
+                    }
+                });
+            }
+        });
+    }
 }
 
 impl State {
@@ -72,31 +116,41 @@ impl State {
                 return;
             }
             let small = std::fs::metadata(&path).is_ok_and(|m| m.len() <= PREFETCH_MAX_BYTES);
-            if small {
-                let _ = self.render(&path);
+            if small && let Ok(doc) = self.document(&path) {
+                doc.shard(0);
             }
         }
     }
 
-    /// The document's HTML, from the cache unless the file changed since.
-    fn render(&self, path: &Path) -> std::io::Result<Arc<str>> {
+    /// The file as a document, from the cache unless the file changed since.
+    /// A new multi-shard document starts rendering its shards in the background.
+    fn document(&self, path: &Path) -> std::io::Result<Arc<Document>> {
         let modified = std::fs::metadata(path)?.modified()?;
-        if let Some(cached) = self.rendered.lock().unwrap().get(path)
-            && cached.modified == modified
+        if let Some(doc) = self.documents.lock().unwrap().get(path)
+            && doc.modified == modified
         {
-            return Ok(cached.html.clone());
+            return Ok(doc.clone());
         }
-        // Rendering happens outside the lock, so other requests aren't held up.
-        let html: Arc<str> = render::markdown(&std::fs::read_to_string(path)?).into();
-        let entry = Rendered {
+        let sources = render::split(&std::fs::read_to_string(path)?);
+        let doc = Arc::new(Document {
             modified,
-            html: html.clone(),
-        };
-        self.rendered
+            shards: sources.iter().map(|_| OnceLock::new()).collect(),
+            sources,
+            stale: AtomicBool::new(false),
+        });
+        let old = self
+            .documents
             .lock()
             .unwrap()
-            .insert(path.to_path_buf(), entry);
-        Ok(html)
+            .insert(path.to_path_buf(), doc.clone());
+        if let Some(old) = old {
+            old.stale.store(true, Ordering::Relaxed);
+        }
+        if doc.len() > 1 {
+            let doc = doc.clone();
+            std::thread::spawn(move || doc.render_rest());
+        }
+        Ok(doc)
     }
 }
 
@@ -114,7 +168,20 @@ pub fn handle(state: &State, request: &Request<Vec<u8>>) -> Response<Cow<'static
             }
             match request.uri().query() {
                 Some("mtime") => respond("text/plain", mtime(&path)),
-                Some("content") => respond("text/html", content(state, &path)),
+                Some("content") => {
+                    let (html, shards) = first_shard(state, &path);
+                    let mut response = respond("text/html", html);
+                    response.headers_mut().insert("X-Shards", shards.into());
+                    response
+                }
+                Some(query) if query.starts_with("shard=") => {
+                    let index = query["shard=".len()..].parse().ok();
+                    let shard = state.document(&path).ok().and_then(|doc| doc.shard(index?));
+                    match shard {
+                        Some(html) => respond("text/html", html.to_string()),
+                        None => not_found(),
+                    }
+                }
                 _ => respond("text/html", shell(state, Some(&path))),
             }
         }
@@ -128,15 +195,15 @@ pub fn url_for(path: &Path) -> String {
 
 fn shell(state: &State, doc: Option<&Path>) -> String {
     let has_root = state.root().is_some();
-    let (title, content) = match doc {
+    let (title, (content, shards)) = match doc {
         Some(path) => {
             let name = path.file_name().unwrap_or_default().to_string_lossy();
-            (format!("{name} — lector"), self::content(state, path))
+            (format!("{name} — lector"), first_shard(state, path))
         }
-        None if has_root => ("lector".to_owned(), notice("No Markdown files here.")),
+        None if has_root => ("lector".to_owned(), (notice("No Markdown files here."), 1)),
         None => (
             "lector".to_owned(),
-            notice("Drop a Markdown file or folder here."),
+            (notice("Drop a Markdown file or folder here."), 1),
         ),
     };
     fill(
@@ -145,21 +212,28 @@ fn shell(state: &State, doc: Option<&Path>) -> String {
             ("title", &escape(&title)),
             ("class", if has_root { "has-sidebar" } else { "" }),
             ("mtime", &doc.map(mtime).unwrap_or_default()),
+            ("shards", &shards.to_string()),
             ("sidebar", &sidebar(state)),
             ("content", &content),
         ],
     )
 }
 
-fn content(state: &State, path: &Path) -> String {
-    match state.render(path) {
-        Ok(html) => html.to_string(),
-        Err(e) => notice(&format!("Cannot open {}: {e}", path.display())),
+/// The document's first shard, and how many shards it has in total.
+fn first_shard(state: &State, path: &Path) -> (String, usize) {
+    let doc = state.document(path);
+    match doc.as_ref().map(|doc| (doc.shard(0), doc.len())) {
+        Ok((Some(html), shards)) => (html.to_string(), shards),
+        Ok((None, _)) => (notice("Empty document."), 1),
+        Err(e) => (notice(&format!("Cannot open {}: {e}", path.display())), 1),
     }
 }
 
 fn notice(message: &str) -> String {
-    format!(r#"<p class="notice">{}</p>"#, escape(message))
+    format!(
+        r#"<div class="shard"><p class="notice">{}</p></div>"#,
+        escape(message)
+    )
 }
 
 /// The browsed folder's name as a header, then its file tree.
@@ -194,11 +268,15 @@ fn file(path: &Path) -> Response<Cow<'static, [u8]>> {
             .header(CONTENT_TYPE, mime_type(path))
             .body(Cow::Owned(bytes))
             .unwrap(),
-        Err(_) => Response::builder()
-            .status(404)
-            .body(Cow::Borrowed(&b""[..]))
-            .unwrap(),
+        Err(_) => not_found(),
     }
+}
+
+fn not_found() -> Response<Cow<'static, [u8]>> {
+    Response::builder()
+        .status(404)
+        .body(Cow::Borrowed(&b""[..]))
+        .unwrap()
 }
 
 fn respond(mime: &str, body: impl Into<String>) -> Response<Cow<'static, [u8]>> {
@@ -320,13 +398,15 @@ mod tests {
                 .unwrap();
         };
 
+        let html = || state.document(&path).unwrap().shard(0).unwrap();
+
         file("# One", 1_000);
-        assert!(state.render(&path).unwrap().contains("One"));
+        assert!(html().contains("One"));
         // Same modification time: served from the cache, even though the text differs.
         file("# Two", 1_000);
-        assert!(state.render(&path).unwrap().contains("One"));
+        assert!(html().contains("One"));
         file("# Two", 2_000);
-        assert!(state.render(&path).unwrap().contains("Two"));
+        assert!(html().contains("Two"));
 
         std::fs::remove_file(&path).unwrap();
     }
@@ -345,11 +425,10 @@ mod tests {
         let state = Arc::new(State::default());
         state.set_root(Some(root.clone()));
         let cached = |name: &str| {
-            state
-                .rendered
-                .lock()
-                .unwrap()
-                .contains_key(&root.join(name))
+            let documents = state.documents.lock().unwrap();
+            documents
+                .get(&root.join(name))
+                .is_some_and(|doc| doc.shards[0].get().is_some())
         };
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
         while !(cached("a.md") && cached("sub/b.md")) {
@@ -362,6 +441,28 @@ mod tests {
         assert!(!cached("0-big.md"), "files over the limit render on demand");
 
         std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn large_documents_render_every_shard_in_the_background() {
+        let path = std::env::temp_dir().join(format!("lector-shards-{}.md", std::process::id()));
+        let filler = "Words to fill out the chapter.\n\n".repeat(300);
+        let text: String = (0..100)
+            .map(|i| format!("# Chapter {i}\n\n{filler}"))
+            .collect();
+        std::fs::write(&path, &text).unwrap();
+
+        let state = State::default();
+        let doc = state.document(&path).unwrap();
+        assert!(doc.len() > 5, "{} shards", doc.len());
+        let html: String = (0..doc.len())
+            .map(|i| doc.shard(i).unwrap().to_string())
+            .collect();
+        assert_eq!(html.matches("<h1").count(), 100);
+        assert!(doc.shard(doc.len()).is_none());
+        assert!(doc.shards.iter().all(|s| s.get().is_some()));
+
+        std::fs::remove_file(&path).unwrap();
     }
 
     #[test]
