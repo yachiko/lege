@@ -472,16 +472,32 @@
     return clamped;
   }
 
+  document.getElementById('sidebar-toggle').addEventListener('click', () => {
+    setSidebarHidden(!body.classList.contains('sidebar-hidden'));
+  });
+
+  // Dragging the edge resizes; letting go near the window edge collapses the
+  // sidebar instead, keeping the width it had before the drag.
   resizer.addEventListener('pointerdown', (event) => {
     event.preventDefault();
     resizer.setPointerCapture(event.pointerId);
     body.classList.add('resizing');
-    let width = sidebar.offsetWidth;
-    const move = (e) => { width = setSidebarWidth(e.clientX); };
+    const before = sidebar.offsetWidth;
+    let width = before;
+    let x = event.clientX;
+    const move = (e) => {
+      x = e.clientX;
+      width = setSidebarWidth(x);
+    };
     const stop = () => {
       resizer.removeEventListener('pointermove', move);
       body.classList.remove('resizing');
-      prefs.set('sidebarWidth', width);
+      if (x < 100) {
+        setSidebarWidth(before);
+        setSidebarHidden(true);
+      } else {
+        prefs.set('sidebarWidth', width);
+      }
     };
     resizer.addEventListener('pointermove', move);
     resizer.addEventListener('pointerup', stop, { once: true });

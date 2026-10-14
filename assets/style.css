@@ -138,7 +138,37 @@ body {
   transition: margin-left 0.18s ease;
 }
 
+/* One button collapses the sidebar from its header and, once collapsed,
+   waits at the window's left edge to bring it back. */
+#sidebar-toggle {
+  display: none;
+  position: fixed;
+  top: 9px;
+  left: calc(var(--sidebar-width) - 38px);
+  z-index: 2;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: default;
+  transition: left 0.18s ease, background-color 0.12s, color 0.12s;
+}
+#sidebar-toggle svg { transition: transform 0.18s ease; }
+#sidebar-toggle:hover { background: var(--sidebar-hover); color: var(--sidebar-ink); }
+body.sidebar-hidden #sidebar-toggle {
+  left: 10px;
+  background: var(--sidebar-bg);
+  border-color: var(--rule-strong);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.15);
+}
+body.sidebar-hidden #sidebar-toggle svg { transform: rotate(180deg); }
+
 body.has-sidebar #sidebar { display: block; }
+body.has-sidebar #sidebar-toggle { display: grid; }
 body.has-sidebar:not(.sidebar-hidden) #resizer { display: block; }
 body.has-sidebar:not(.sidebar-hidden) #canvas { margin-left: var(--sidebar-width); }
 body.sidebar-hidden #sidebar { transform: translateX(-100%); }
@@ -176,7 +206,7 @@ body.resizing, body.resizing * { cursor: col-resize; user-select: none; transiti
   top: 0;
   z-index: 1;
   margin: 0 -8px 4px;
-  padding: 14px 18px 8px;
+  padding: 14px 46px 8px 18px; /* room on the right for the toggle button */
   background: var(--sidebar-bg);
   color: var(--muted);
   font-weight: 600;

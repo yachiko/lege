@@ -32,7 +32,9 @@ jumps to the match and highlights every occurrence on the page.
 | `Ctrl +` / `Ctrl -` / `Ctrl 0` | Zoom              |
 | `Ctrl+Q` / `Ctrl+W`       | Quit                    |
 
-On macOS, use `Cmd` instead of `Ctrl`. Drag the sidebar's edge to resize it.
+On macOS, use `Cmd` instead of `Ctrl`. The sidebar also collapses with the
+`‹` button in its header (`›` at the window edge brings it back), or by
+dragging its edge to the side of the window; drag the edge to resize it.
 
 ## Build
 
