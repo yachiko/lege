@@ -513,6 +513,7 @@
   let enterPending = false;
 
   function openSearch() {
+    body.classList.add('searching');
     search.hidden = false;
     searchInput.focus();
     searchInput.select();
@@ -520,6 +521,7 @@
 
   function closeSearch() {
     enterPending = false;
+    body.classList.remove('searching');
     search.hidden = true;
     searchInput.blur();
   }
