@@ -13,7 +13,7 @@ mod tree;
 
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use tao::dpi::LogicalSize;
 use tao::event::{Event, WindowEvent};
@@ -21,7 +21,7 @@ use tao::event_loop::{ControlFlow, EventLoopBuilder};
 use tao::window::{Theme, Window, WindowBuilder};
 use wry::{DragDropEvent, NewWindowResponse, WebView, WebViewBuilder};
 
-use server::{ORIGIN, Root};
+use server::{ORIGIN, State};
 
 enum UserEvent {
     Open(PathBuf),
@@ -29,9 +29,12 @@ enum UserEvent {
 }
 
 fn main() {
-    let root: Root = Arc::new(Mutex::new(None));
+    // Load syntax highlighting while the window comes up.
+    std::thread::spawn(render::warm_up);
+
+    let state = Arc::new(State::default());
     let start = match std::env::args_os().nth(1) {
-        Some(arg) => target_url(Path::new(&arg), &root).unwrap_or_else(|e| {
+        Some(arg) => target_url(Path::new(&arg), &state).unwrap_or_else(|e| {
             eprintln!("lege: {e}");
             std::process::exit(1);
         }),
@@ -55,9 +58,14 @@ fn main() {
     };
 
     let builder = WebViewBuilder::new()
-        .with_custom_protocol("lector".into(), {
-            let root = root.clone();
-            move |_, request| server::handle(&root, &request)
+        // Each request is answered on its own thread: rendering a large
+        // document must never block the UI thread the webview runs on.
+        .with_asynchronous_custom_protocol("lector".into(), {
+            let state = state.clone();
+            move |_, request, responder| {
+                let state = state.clone();
+                std::thread::spawn(move || responder.respond(server::handle(&state, &request)));
+            }
         })
         .with_url(start)
         .with_background_color(background)
@@ -97,7 +105,7 @@ fn main() {
                 ..
             }
             | Event::UserEvent(UserEvent::Quit) => *control_flow = ControlFlow::Exit,
-            Event::UserEvent(UserEvent::Open(path)) => match target_url(&path, &root) {
+            Event::UserEvent(UserEvent::Open(path)) => match target_url(&path, &state) {
                 Ok(url) => {
                     let _ = webview.load_url(&url);
                 }
@@ -110,23 +118,22 @@ fn main() {
 
 /// Works out what to show for a path given on the command line or dropped
 /// on the window, updating the browsed directory. Returns the URL to load.
-fn target_url(path: &Path, root: &Root) -> Result<String, String> {
+fn target_url(path: &Path, state: &Arc<State>) -> Result<String, String> {
     let path = path
         .canonicalize()
         .map_err(|e| format!("{}: {e}", path.display()))?;
-    let mut root = root.lock().unwrap();
 
     if path.is_dir() {
         let first = tree::initial_file(&tree::scan(&path)).map(server::url_for);
-        *root = Some(path);
+        state.set_root(Some(path));
         return Ok(first.unwrap_or_else(|| format!("{ORIGIN}/")));
     }
     if !tree::is_markdown(&path) {
         return Err(format!("{}: not a Markdown file", path.display()));
     }
     // A file from outside the browsed directory leaves directory mode.
-    if !root.as_ref().is_some_and(|r| path.starts_with(r)) {
-        *root = None;
+    if state.root().is_some_and(|root| !path.starts_with(root)) {
+        state.set_root(None);
     }
     Ok(server::url_for(&path))
 }

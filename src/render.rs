@@ -24,6 +24,13 @@ static SANITIZER: LazyLock<ammonia::Builder<'static>> = LazyLock::new(|| {
     builder
 });
 
+/// Loads the syntax definitions and sanitizer rules ahead of the first
+/// document; meant to run on a background thread at startup.
+pub fn warm_up() {
+    LazyLock::force(&HIGHLIGHTER);
+    LazyLock::force(&SANITIZER);
+}
+
 pub fn markdown(text: &str) -> String {
     let mut options = Options::default();
     let ext = &mut options.extension;

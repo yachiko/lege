@@ -89,6 +89,18 @@ fn sort(nodes: &mut [Node]) {
     }
 }
 
+/// Every file in the tree, in display order.
+pub fn files(nodes: &[Node]) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    for node in nodes {
+        match &node.kind {
+            Kind::File => out.push(node.path.clone()),
+            Kind::Dir(children) => out.extend(files(children)),
+        }
+    }
+    out
+}
+
 /// The file to show first when opening a directory: a top-level README or
 /// index if there is one, then any top-level file, then the first file in
 /// the tree.

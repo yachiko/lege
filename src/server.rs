@@ -9,11 +9,17 @@
 //! - `/path/to/doc.md?mtime` — the file's modification time, polled for live reload
 //! - `/_lector/*` — the viewer's own assets, and the sidebar tree
 //! - any other path — the file's bytes, e.g. images
+//!
+//! Requests are answered off the UI thread (see `main`), and rendered
+//! documents are cached until their file changes. Opening a directory starts
+//! a background prefetch of its files, so clicking through them is instant.
 
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::UNIX_EPOCH;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use wry::http::{Request, Response, header::CONTENT_TYPE};
 
@@ -28,16 +34,79 @@ const SHELL: &str = include_str!("../assets/shell.html");
 const STYLE: &str = include_str!("../assets/style.css");
 const SCRIPT: &str = include_str!("../assets/app.js");
 
-/// The directory shown in the sidebar, if lector is browsing one.
-pub type Root = Arc<Mutex<Option<PathBuf>>>;
+/// Files larger than this aren't prefetched; they render when opened.
+const PREFETCH_MAX_BYTES: u64 = 1024 * 1024;
 
-pub fn handle(root: &Root, request: &Request<Vec<u8>>) -> Response<Cow<'static, [u8]>> {
+#[derive(Default)]
+pub struct State {
+    /// The directory shown in the sidebar, if lector is browsing one.
+    root: Mutex<Option<PathBuf>>,
+    rendered: Mutex<HashMap<PathBuf, Rendered>>,
+    /// Bumped whenever the root changes, so a stale prefetch stops early.
+    generation: AtomicU64,
+}
+
+struct Rendered {
+    modified: SystemTime,
+    html: Arc<str>,
+}
+
+impl State {
+    pub fn root(&self) -> Option<PathBuf> {
+        self.root.lock().unwrap().clone()
+    }
+
+    /// Switches the browsed directory and starts prefetching its files.
+    pub fn set_root(self: &Arc<Self>, root: Option<PathBuf>) {
+        *self.root.lock().unwrap() = root.clone();
+        let generation = self.generation.fetch_add(1, Ordering::SeqCst) + 1;
+        if let Some(root) = root {
+            let state = self.clone();
+            std::thread::spawn(move || state.prefetch(&root, generation));
+        }
+    }
+
+    fn prefetch(&self, root: &Path, generation: u64) {
+        for path in tree::files(&tree::scan(root)) {
+            if self.generation.load(Ordering::SeqCst) != generation {
+                return;
+            }
+            let small = std::fs::metadata(&path).is_ok_and(|m| m.len() <= PREFETCH_MAX_BYTES);
+            if small {
+                let _ = self.render(&path);
+            }
+        }
+    }
+
+    /// The document's HTML, from the cache unless the file changed since.
+    fn render(&self, path: &Path) -> std::io::Result<Arc<str>> {
+        let modified = std::fs::metadata(path)?.modified()?;
+        if let Some(cached) = self.rendered.lock().unwrap().get(path)
+            && cached.modified == modified
+        {
+            return Ok(cached.html.clone());
+        }
+        // Rendering happens outside the lock, so other requests aren't held up.
+        let html: Arc<str> = render::markdown(&std::fs::read_to_string(path)?).into();
+        let entry = Rendered {
+            modified,
+            html: html.clone(),
+        };
+        self.rendered
+            .lock()
+            .unwrap()
+            .insert(path.to_path_buf(), entry);
+        Ok(html)
+    }
+}
+
+pub fn handle(state: &State, request: &Request<Vec<u8>>) -> Response<Cow<'static, [u8]>> {
     let path = percent_decode(request.uri().path());
     match path.as_str() {
         "/_lector/style.css" => respond("text/css", STYLE),
         "/_lector/app.js" => respond("text/javascript", SCRIPT),
-        "/_lector/tree" => respond("text/html", sidebar(root)),
-        "/" => respond("text/html", shell(root, None)),
+        "/_lector/tree" => respond("text/html", sidebar(state)),
+        "/" => respond("text/html", shell(state, None)),
         _ => {
             let path = PathBuf::from(path);
             if !tree::is_markdown(&path) {
@@ -45,8 +114,8 @@ pub fn handle(root: &Root, request: &Request<Vec<u8>>) -> Response<Cow<'static, 
             }
             match request.uri().query() {
                 Some("mtime") => respond("text/plain", mtime(&path)),
-                Some("content") => respond("text/html", content(&path)),
-                _ => respond("text/html", shell(root, Some(&path))),
+                Some("content") => respond("text/html", content(state, &path)),
+                _ => respond("text/html", shell(state, Some(&path))),
             }
         }
     }
@@ -57,12 +126,12 @@ pub fn url_for(path: &Path) -> String {
     format!("{ORIGIN}{}", percent_encode(&path.to_string_lossy()))
 }
 
-fn shell(root: &Root, doc: Option<&Path>) -> String {
-    let has_root = root.lock().unwrap().is_some();
+fn shell(state: &State, doc: Option<&Path>) -> String {
+    let has_root = state.root().is_some();
     let (title, content) = match doc {
         Some(path) => {
             let name = path.file_name().unwrap_or_default().to_string_lossy();
-            (format!("{name} — lector"), self::content(path))
+            (format!("{name} — lector"), self::content(state, path))
         }
         None if has_root => ("lector".to_owned(), notice("No Markdown files here.")),
         None => (
@@ -76,15 +145,15 @@ fn shell(root: &Root, doc: Option<&Path>) -> String {
             ("title", &escape(&title)),
             ("class", if has_root { "has-sidebar" } else { "" }),
             ("mtime", &doc.map(mtime).unwrap_or_default()),
-            ("sidebar", &sidebar(root)),
+            ("sidebar", &sidebar(state)),
             ("content", &content),
         ],
     )
 }
 
-fn content(path: &Path) -> String {
-    match std::fs::read_to_string(path) {
-        Ok(text) => render::markdown(&text),
+fn content(state: &State, path: &Path) -> String {
+    match state.render(path) {
+        Ok(html) => html.to_string(),
         Err(e) => notice(&format!("Cannot open {}: {e}", path.display())),
     }
 }
@@ -94,8 +163,8 @@ fn notice(message: &str) -> String {
 }
 
 /// The browsed folder's name as a header, then its file tree.
-fn sidebar(root: &Root) -> String {
-    let Some(root) = root.lock().unwrap().clone() else {
+fn sidebar(state: &State) -> String {
+    let Some(root) = state.root() else {
         return String::new();
     };
     let full = root.to_string_lossy();
@@ -234,6 +303,65 @@ mod tests {
         assert_eq!(percent_encode("/my notes.md"), "/my%20notes.md");
         assert_eq!(percent_decode("100%"), "100%");
         assert_eq!(percent_decode("%zz"), "%zz");
+    }
+
+    #[test]
+    fn rerenders_only_when_the_file_changes() {
+        let path = std::env::temp_dir().join(format!("lector-cache-{}.md", std::process::id()));
+        let state = State::default();
+        let file = |text: &str, secs: u64| {
+            std::fs::write(&path, text).unwrap();
+            let time = UNIX_EPOCH + std::time::Duration::from_secs(secs);
+            std::fs::File::options()
+                .write(true)
+                .open(&path)
+                .unwrap()
+                .set_modified(time)
+                .unwrap();
+        };
+
+        file("# One", 1_000);
+        assert!(state.render(&path).unwrap().contains("One"));
+        // Same modification time: served from the cache, even though the text differs.
+        file("# Two", 1_000);
+        assert!(state.render(&path).unwrap().contains("One"));
+        file("# Two", 2_000);
+        assert!(state.render(&path).unwrap().contains("Two"));
+
+        std::fs::remove_file(&path).unwrap();
+    }
+
+    #[test]
+    fn opening_a_directory_prefetches_its_small_files() {
+        let root = std::env::temp_dir().join(format!("lector-prefetch-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("sub")).unwrap();
+        std::fs::write(root.join("a.md"), "# A").unwrap();
+        std::fs::write(root.join("sub/b.md"), "# B").unwrap();
+        let big = "x".repeat(PREFETCH_MAX_BYTES as usize + 1);
+        // Sorts before a.md, so once a.md is cached the big file was already skipped.
+        std::fs::write(root.join("0-big.md"), big).unwrap();
+
+        let state = Arc::new(State::default());
+        state.set_root(Some(root.clone()));
+        let cached = |name: &str| {
+            state
+                .rendered
+                .lock()
+                .unwrap()
+                .contains_key(&root.join(name))
+        };
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while !(cached("a.md") && cached("sub/b.md")) {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "prefetch did not finish"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert!(!cached("0-big.md"), "files over the limit render on demand");
+
+        std::fs::remove_dir_all(&root).unwrap();
     }
 
     #[test]
