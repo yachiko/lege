@@ -1,4 +1,4 @@
-# lector (command: lege) — common tasks. Run `make help` for the list.
+# Lege — common tasks. Run `make help` for the list.
 
 CARGO  ?= cargo
 PYTHON ?= python3
@@ -6,13 +6,17 @@ PREFIX ?= $(HOME)/.local
 BIN    := lege
 
 VERSION := $(shell sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)
-TARGET  := $(shell rustc -vV | sed -n 's/^host: //p')
-NAME    := lector-$(VERSION)-$(TARGET)
+# Rust target triple to build for; release CI sets it per platform.
+TARGET  ?= $(shell rustc -vV | sed -n 's/^host: //p')
+OS      := $(if $(findstring apple-darwin,$(TARGET)),darwin,linux)
+ARCH    := $(if $(findstring aarch64,$(TARGET)),arm64,amd64)
+# Same archive naming as the other yachiko projects: name_version_os_arch.
+NAME    := lege_$(VERSION)_$(OS)_$(ARCH)
 DIST    := dist
 SHA256  := $(shell command -v sha256sum 2>/dev/null || echo shasum -a 256)
 
 .DEFAULT_GOAL := help
-.PHONY: help build run test lint release install uninstall testdata clean
+.PHONY: help build run test lint release dist install uninstall testdata clean
 
 help: ## Show this help
 	@grep -E '^[a-z]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  make %-10s %s\n", $$1, $$2}'
@@ -30,13 +34,15 @@ lint: ## Check formatting and run clippy
 	$(CARGO) fmt --check
 	$(CARGO) clippy --all-targets -- -D warnings
 
-release: lint test ## Optimized build, packaged into dist/
-	$(CARGO) build --release --locked
+release: lint test dist ## Lint, test, then build and package for this machine
+
+dist: ## Optimized build for TARGET, packaged as dist/lege_VERSION_OS_ARCH.tar.gz
+	$(CARGO) build --release --locked --target $(TARGET)
 	rm -rf $(DIST)/$(NAME)
 	mkdir -p $(DIST)/$(NAME)
-	cp target/release/$(BIN) README.md $(DIST)/$(NAME)/
-	cp target/release/$(BIN) $(DIST)/$(BIN)
-	tar -czf $(DIST)/$(NAME).tar.gz -C $(DIST) $(NAME)
+	cp target/$(TARGET)/release/$(BIN) LICENSE README.md $(DIST)/$(NAME)/
+	cp target/$(TARGET)/release/$(BIN) $(DIST)/$(BIN)
+	tar -czf $(DIST)/$(NAME).tar.gz -C $(DIST)/$(NAME) $(BIN) LICENSE README.md
 	cd $(DIST) && $(SHA256) $(NAME).tar.gz > $(NAME).tar.gz.sha256
 	rm -rf $(DIST)/$(NAME)
 	@echo

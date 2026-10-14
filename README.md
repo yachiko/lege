@@ -32,6 +32,12 @@ Lege (Latin for *"read!"*) opens a Markdown file, or a whole folder of them, as 
 
 ## Install
 
+### Homebrew (macOS / Linux)
+
+```sh
+brew install --cask yachiko/tap/lege
+```
+
 ### From Source
 
 ```sh
@@ -44,7 +50,7 @@ make install    # optimized build into ~/.local/bin (or PREFIX=/usr/local)
 cargo install --path .
 ```
 
-Lege renders through the system webview: WebKitGTK on Linux (`webkit2gtk-4.1` on Arch) and WKWebView on macOS, which ships with the OS.
+Lege renders through the system webview: WKWebView on macOS, which ships with the OS, and WebKitGTK 4.1 on Linux (`libwebkit2gtk-4.1-0` on Debian/Ubuntu, `webkit2gtk4.1` on Fedora, `webkit2gtk-4.1` on Arch).
 
 ## Usage
 
@@ -117,8 +123,11 @@ make test
 # Formatting check and clippy
 make lint
 
-# Optimized build, packaged into dist/ with a checksum
+# Lint, test, then an optimized build packaged as dist/lege_VERSION_OS_ARCH.tar.gz
 make release
+
+# Package for another target, e.g. Intel Macs from Apple Silicon
+make dist TARGET=x86_64-apple-darwin
 
 # Generate test documents: baseline/, many/ (2,000 files), huge/ (10 MB)
 make testdata
@@ -127,10 +136,14 @@ make testdata
 make clean
 ```
 
+## Releasing
+
+Push a `vX.Y.Z` tag matching the version in `Cargo.toml`. The [release workflow](.github/workflows/release.yml) builds natively for Linux (x86_64, ARM) and macOS (Apple Silicon, Intel), publishes the archives with a cosign-signed `checksums.txt` and SLSA provenance, and updates the cask in [yachiko/homebrew-tap](https://github.com/yachiko/homebrew-tap). Tags with a suffix (`v1.0.0-rc.1`) become prereleases and skip the tap.
+
 ## Tech Stack
 
 - [Rust](https://www.rust-lang.org/)
-- [wry](https://github.com/tauri-apps/wry) and [tao](https://github.com/tauri-apps/tao) -- system webview and window
+- [wry](https://github.com/tauri-apps/wry), [tao](https://github.com/tauri-apps/tao) and [muda](https://github.com/tauri-apps/muda) -- system webview, window and the macOS menu bar
 - [comrak](https://github.com/kivikakk/comrak) -- GitHub-flavoured Markdown
 - [syntect](https://github.com/trishume/syntect) -- syntax highlighting
 - [ammonia](https://github.com/rust-ammonia/ammonia) -- HTML sanitizing
