@@ -26,6 +26,8 @@
   --sidebar-muted: #4f555e;
   --sidebar-hover: rgb(0 0 0 / 0.05);
   --sidebar-guide: rgb(0 0 0 / 0.13);
+  --sidebar-card: #f5f6f8;
+  --sidebar-card-border: rgb(0 0 0 / 0.08);
   --scroll-thumb: rgb(0 0 0 / 0.22);
 
   --note: #0969da;
@@ -62,6 +64,8 @@
     --sidebar-muted: #9ca2aa;
     --sidebar-hover: rgb(255 255 255 / 0.05);
     --sidebar-guide: rgb(255 255 255 / 0.13);
+    --sidebar-card: #212226;
+    --sidebar-card-border: rgb(255 255 255 / 0.07);
     --scroll-thumb: rgb(255 255 255 / 0.18);
 
     --note: #4493f8;
@@ -114,7 +118,7 @@ body {
   padding: 0 8px 32px;
   background: var(--sidebar-bg);
   border-right: 1px solid var(--rule-strong);
-  font: 13.5px/18px var(--sans);
+  font: 14.5px/20px var(--sans);
   transition: transform 0.18s ease;
 }
 
@@ -186,13 +190,10 @@ body.resizing, body.resizing * { cursor: col-resize; user-select: none; transiti
 #sidebar ul { list-style: none; margin: 0; padding: 0; }
 #sidebar li, #sidebar details { margin: 0; }
 
-/* Rows are 26px; file names line up with folder names after the chevron. */
 #sidebar a,
 #sidebar summary {
   display: block;
-  padding: 4px 10px 4px 21px;
-  border-radius: 5px;
-  color: var(--sidebar-muted);
+  color: var(--sidebar-ink);
   text-decoration: none;
   white-space: nowrap;
   overflow: hidden;
@@ -200,52 +201,70 @@ body.resizing, body.resizing * { cursor: col-resize; user-select: none; transiti
   cursor: default;
 }
 
+/* Folders: plain rows with a chevron. */
 #sidebar summary {
-  padding-left: 9px;
-  color: var(--sidebar-ink);
-  font-weight: 550;
+  margin: 2px 0;
+  padding: 7px 9px;
+  border-radius: 6px;
+  font-weight: 600;
   list-style: none;
 }
 #sidebar summary::-webkit-details-marker { display: none; }
 #sidebar summary::before {
   content: "";
   display: inline-block;
-  margin: 0 7px 1px 1px;
-  border-left: 4px solid currentColor;
-  border-top: 3.5px solid transparent;
-  border-bottom: 3.5px solid transparent;
+  margin: 0 8px 1px 1px;
+  border-left: 4.5px solid currentColor;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
   opacity: 0.45;
   transition: transform 0.12s ease;
 }
 #sidebar details[open] > summary::before { transform: rotate(90deg); }
+#sidebar summary:hover { background: var(--sidebar-hover); }
 
 /* Indent guide: a hairline running down from each open folder's chevron. */
 #sidebar details > ul {
-  margin-left: 12px;
+  margin: 0 0 6px 12px;
+  padding-left: 8px;
   border-left: 1px solid var(--sidebar-guide);
 }
 
-#sidebar a:hover,
-#sidebar summary:hover { background: var(--sidebar-hover); color: var(--sidebar-ink); }
-
-/* The open file: an accent bar down its row and its outline, and a light tint. */
-#sidebar li.current { box-shadow: inset 2px 0 0 var(--link); }
-#sidebar a[aria-current] {
-  border-radius: 0 5px 5px 0;
-  background: color-mix(in srgb, var(--link) 13%, transparent);
+/* Files: each its own card, so entries stand apart from folders and each other. */
+#sidebar a:not(.heading) {
+  margin: 0 0 4px;
+  padding: 7px 12px;
+  background: var(--sidebar-card);
+  border: 1px solid var(--sidebar-card-border);
+  border-radius: 6px;
+  color: var(--sidebar-muted);
+}
+#sidebar a:not(.heading):hover {
+  border-color: var(--rule-strong);
   color: var(--sidebar-ink);
-  font-weight: 550;
 }
 
-/* The open document's sections, under its file. */
-#sidebar .outline { padding-bottom: 4px; }
-#sidebar .outline a {
-  padding: 3px 10px 3px 33px;
-  color: var(--muted);
-  font-size: 12.5px;
-  line-height: 17px;
+/* The open file: an accented card. */
+#sidebar a[aria-current] {
+  background: color-mix(in srgb, var(--link) 14%, var(--sidebar-card));
+  border-color: color-mix(in srgb, var(--link) 55%, transparent);
+  color: var(--sidebar-ink);
+  font-weight: 600;
 }
-#sidebar .outline a.active { color: var(--link); font-weight: 550; }
+
+/* The open document's sections, hanging off its card on an accent line. */
+#sidebar .outline {
+  margin: 2px 0 10px 12px;
+  border-left: 2px solid color-mix(in srgb, var(--link) 50%, transparent);
+}
+#sidebar .outline a {
+  padding: 4px 10px 4px 12px;
+  color: var(--muted);
+  font-size: 13.5px;
+  line-height: 19px;
+}
+#sidebar .outline a:hover { color: var(--sidebar-ink); }
+#sidebar .outline a.active { color: var(--link); font-weight: 600; }
 
 /* ---------- Document ---------- */
 
