@@ -16,7 +16,7 @@ DIST    := dist
 SHA256  := $(shell command -v sha256sum 2>/dev/null || echo shasum -a 256)
 
 .DEFAULT_GOAL := help
-.PHONY: help build run test lint release dist install uninstall testdata clean
+.PHONY: help build run test lint release dist install uninstall icon testdata clean
 
 help: ## Show this help
 	@grep -E '^[a-z]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  make %-10s %s\n", $$1, $$2}'
@@ -48,12 +48,28 @@ dist: ## Optimized build for TARGET, packaged as dist/lege_VERSION_OS_ARCH.tar.g
 	@echo
 	@ls -lh $(DIST)/$(BIN) $(DIST)/$(NAME).tar.gz | awk '{print "  " $$5 "\t" $$9}'
 
-install: release ## Install lege to $(PREFIX)/bin
+# On Linux, also a desktop entry and icon: Wayland compositors take a
+# window's icon from the desktop entry matching its app ID (lege).
+DESKTOP := $(PREFIX)/share/applications/lege.desktop
+ICONS   := $(PREFIX)/share/icons/hicolor
+
+install: release ## Install lege to $(PREFIX)/bin (and its desktop entry and icon on Linux)
 	mkdir -p $(PREFIX)/bin
 	install -m 755 $(DIST)/$(BIN) $(PREFIX)/bin/$(BIN)
+ifeq ($(shell uname),Linux)
+	install -Dm644 assets/icon.svg $(ICONS)/scalable/apps/lege.svg
+	install -Dm644 assets/icon.png $(ICONS)/512x512/apps/lege.png
+	mkdir -p $(dir $(DESKTOP))
+	sed 's|^Exec=lege|Exec=$(PREFIX)/bin/lege|' assets/lege.desktop > $(DESKTOP)
+	-gtk-update-icon-cache -q -t $(ICONS) 2>/dev/null
+	-update-desktop-database -q $(dir $(DESKTOP)) 2>/dev/null
+endif
 
-uninstall: ## Remove lege from $(PREFIX)/bin
-	rm -f $(PREFIX)/bin/$(BIN)
+uninstall: ## Remove lege from $(PREFIX)
+	rm -f $(PREFIX)/bin/$(BIN) $(DESKTOP) $(ICONS)/scalable/apps/lege.svg $(ICONS)/512x512/apps/lege.png
+
+icon: ## Re-render assets/icon.png from assets/icon.svg (needs ImageMagick)
+	magick -background none assets/icon.svg -resize 512x512 -depth 8 PNG32:assets/icon.png
 
 testdata: ## Generate test documents in testdata/ (HUGE_MB=10 MANY=2000)
 	$(PYTHON) scripts/gen_testdata.py testdata --huge-mb $(or $(HUGE_MB),10) --many $(or $(MANY),2000)

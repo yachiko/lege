@@ -1270,6 +1270,10 @@ dependencies = [
  "ignore",
  "muda",
  "nucleo-matcher",
+ "objc2",
+ "objc2-app-kit",
+ "objc2-foundation",
+ "png",
  "tao",
  "wry",
 ]

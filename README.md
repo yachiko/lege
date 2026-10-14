@@ -44,6 +44,8 @@ brew install --cask yachiko/tap/lege
 make install    # optimized build into ~/.local/bin (or PREFIX=/usr/local)
 ```
 
+On Linux this also installs a desktop entry and the app icon, so Lege shows up in app launchers and Wayland compositors can show its icon.
+
 ### Using Cargo
 
 ```sh

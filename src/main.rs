@@ -17,6 +17,8 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use tao::dpi::LogicalSize;
+#[cfg(target_os = "macos")]
+use tao::event::StartCause;
 use tao::event::{Event, WindowEvent};
 use tao::event_loop::{ControlFlow, EventLoopBuilder};
 use tao::window::{Theme, Window, WindowBuilder};
@@ -37,6 +39,9 @@ Options:
   -h, --help     print this help
   -V, --version  print the version
 ";
+
+/// The app icon: assets/icon.svg rendered by `make icon`.
+const ICON_PNG: &[u8] = include_bytes!("../assets/icon.png");
 
 enum UserEvent {
     Open(PathBuf),
@@ -78,6 +83,7 @@ fn main() {
             .with_title("lector")
             .with_inner_size(LogicalSize::new(1000.0, 1100.0))
             .with_min_inner_size(LogicalSize::new(360.0, 300.0))
+            .with_window_icon(window_icon())
             .build(&event_loop)
             .expect("failed to create window"),
     );
@@ -132,6 +138,9 @@ fn main() {
         let _keep_menu_alive = &menu;
         *control_flow = ControlFlow::Wait;
         match event {
+            // Set after launch, so macOS doesn't replace it with the default.
+            #[cfg(target_os = "macos")]
+            Event::NewEvents(StartCause::Init) => set_dock_icon(),
             Event::WindowEvent {
                 event: WindowEvent::CloseRequested,
                 ..
@@ -203,6 +212,47 @@ fn open_externally(target: &str) {
     }
 }
 
+/// The window icon, for desktops that take it from the window (X11). Wayland
+/// compositors look up the icon of the matching desktop entry instead, which
+/// `make install` provides.
+#[cfg(not(target_os = "macos"))]
+fn window_icon() -> Option<tao::window::Icon> {
+    let mut reader = png::Decoder::new(std::io::Cursor::new(ICON_PNG))
+        .read_info()
+        .ok()?;
+    let mut rgba = vec![0; reader.output_buffer_size()?];
+    let info = reader.next_frame(&mut rgba).ok()?;
+    if info.color_type != png::ColorType::Rgba || info.bit_depth != png::BitDepth::Eight {
+        return None;
+    }
+    rgba.truncate(info.buffer_size());
+    tao::window::Icon::from_rgba(rgba, info.width, info.height).ok()
+}
+
+/// macOS windows have no icon of their own; a bare binary shows the Dock icon.
+#[cfg(target_os = "macos")]
+fn window_icon() -> Option<tao::window::Icon> {
+    None
+}
+
+#[cfg(target_os = "macos")]
+fn set_dock_icon() {
+    use objc2::{AllocAnyThread, MainThreadMarker};
+    use objc2_app_kit::{NSApplication, NSImage};
+    use objc2_foundation::NSData;
+
+    let Some(main_thread) = MainThreadMarker::new() else {
+        return;
+    };
+    let data = NSData::with_bytes(ICON_PNG);
+    if let Some(image) = NSImage::initWithData(NSImage::alloc(), &data) {
+        // SAFETY: the only caveat on this method is that it may reject nil.
+        unsafe {
+            NSApplication::sharedApplication(main_thread).setApplicationIconImage(Some(&image))
+        };
+    }
+}
+
 /// macOS delivers Copy, Paste and Select All to a webview only through the
 /// app's Edit menu, so lege needs a minimal menu bar there. The returned menu
 /// must be kept alive.
@@ -266,4 +316,16 @@ fn build_webview(builder: WebViewBuilder, window: &Window) -> wry::Result<WebVie
     use tao::platform::unix::WindowExtUnix;
     use wry::WebViewBuilderExtUnix;
     builder.build_gtk(window.default_vbox().expect("window has no GTK container"))
+}
+
+#[cfg(test)]
+mod tests {
+    #[cfg(not(target_os = "macos"))]
+    #[test]
+    fn embedded_icon_decodes() {
+        assert!(
+            super::window_icon().is_some(),
+            "assets/icon.png must be 8-bit RGBA"
+        );
+    }
 }
