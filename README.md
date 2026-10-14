@@ -1,49 +1,142 @@
-# lector
+<p align="center">
+  <img src="logo.png" alt="Lege logo" width="170" />
+</p>
 
-A minimal Markdown viewer and explorer, in the spirit of old-school PDF viewers.
-The command is `lege` (Latin for "read!"), short to type.
+<h1 align="center">Lege</h1>
+<p align="center"><strong>A minimal Markdown viewer and explorer, in the spirit of the PDF viewers of old.</strong></p>
 
-```sh
-lege notes.md   # view a file
-lege .          # browse a directory: Markdown files in a collapsible sidebar
-```
+<p align="center">
+  <a href="https://github.com/yachiko/lege/actions/workflows/ci.yml"><img src="https://github.com/yachiko/lege/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/yachiko/lege/releases"><img src="https://img.shields.io/github/v/release/yachiko/lege" alt="Release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/yachiko/lege" alt="License"></a>
+  <a href="Cargo.toml"><img src="https://img.shields.io/badge/rust-2024-orange" alt="Rust edition"></a>
+</p>
 
-You can also drop a file or folder onto the window. The open file reloads when
-it changes on disk, and links to other local `.md` files open in place; web
-links and other files open in their default apps.
+---
 
-The sidebar skips hidden and `.gitignore`d paths.
+Lege (Latin for *"read!"*) opens a Markdown file, or a whole folder of them, as a sheet of paper on a grey canvas. A sidebar lists the folder's files and the open document's sections; everything else stays out of the way until you ask for it.
 
-Search (`Ctrl+K`) matches file names fuzzily and file contents as plain
-text, across the browsed folder (or just the open file). Opening a result
-jumps to the match and highlights every occurrence on the page.
+<p align="center">
+  <img src="docs/screenshot.png" alt="Lege showing a folder of Markdown files with the sidebar and the open document" width="900">
+</p>
 
-## Keys
+## Features
 
-| Key                       | Action                  |
-|---------------------------|-------------------------|
-| `Ctrl+K` / `/`            | Search file names and text |
-| `F3` / `Shift+F3`         | Next / previous match on the page |
-| `Esc`                     | Close search, clear highlights |
-| `F4` / `Ctrl+B`           | Toggle the sidebar      |
-| `Backspace` / `Alt+←`     | Back                    |
-| `Alt+→`                   | Forward                 |
-| `Ctrl+R` / `F5`           | Reload                  |
-| `Ctrl +` / `Ctrl -` / `Ctrl 0` | Zoom              |
-| `Ctrl+Q` / `Ctrl+W`       | Quit                    |
+- **Paper-like reading** -- serif typography on a page with a shadow, in light and dark themes that follow the system
+- **GitHub-flavoured Markdown** -- tables, task lists, footnotes, alerts (`> [!NOTE]`), syntax-highlighted code, images and raw HTML (sanitized)
+- **Folder explorer** -- collapsible sidebar with the folder's Markdown files, skipping hidden and `.gitignore`d paths, plus an outline of the open document that follows your reading position
+- **Search** -- `Ctrl+K` finds file names (fuzzy) and text across the folder; opening a result jumps to the match and highlights every occurrence
+- **Live reload** -- the open file re-renders when it changes on disk, keeping your place
+- **Links that stay inside** -- links to other local `.md` files open in place, with back and forward; web links and other files open in their default apps
+- **Fast on large inputs** -- rendering runs off the UI thread, folders are prefetched in the background, and large documents arrive in shards (a 10 MB file shows its first page in under a second)
 
-On macOS, use `Cmd` instead of `Ctrl`. The sidebar also collapses with the
-`‹` button in its header (`›` at the window edge brings it back), or by
-dragging its edge to the side of the window; drag the edge to resize it.
+## Install
 
-## Build
+### From Source
 
 ```sh
-make release    # optimized build in dist/lege, plus a tarball
-make install    # into ~/.local/bin (or PREFIX=/usr/local)
+make install    # optimized build into ~/.local/bin (or PREFIX=/usr/local)
 ```
 
-or `cargo install --path .`, which puts `lege` in `~/.cargo/bin`.
+### Using Cargo
 
-lector renders through the system webview: WebKitGTK on Linux
-(`webkit2gtk-4.1` on Arch) and WKWebView on macOS, which ships with the OS.
+```sh
+cargo install --path .
+```
+
+Lege renders through the system webview: WebKitGTK on Linux (`webkit2gtk-4.1` on Arch) and WKWebView on macOS, which ships with the OS.
+
+## Usage
+
+```
+lege [path]
+```
+
+**Arguments:**
+
+- `path` -- a Markdown file to view, or a directory to browse (default: an empty window; drop a file or folder onto it)
+
+**Examples:**
+
+```bash
+# View a single file
+lege notes.md
+
+# Browse the current directory
+lege .
+
+# Browse another folder
+lege ~/projects/docs
+```
+
+## Keyboard Shortcuts
+
+On macOS, use `Cmd` instead of `Ctrl`.
+
+### Navigation
+
+| Key                     | Action                       |
+| ----------------------- | ---------------------------- |
+| `Backspace` / `Alt+←`   | Back                         |
+| `Alt+→`                 | Forward                      |
+| `Ctrl+R` / `F5`         | Reload                       |
+| `Ctrl +` / `Ctrl -`     | Zoom in / out                |
+| `Ctrl+0`                | Reset zoom                   |
+| `Ctrl+Q` / `Ctrl+W`     | Quit                         |
+
+### Sidebar
+
+| Key               | Action                                                          |
+| ----------------- | --------------------------------------------------------------- |
+| `F4` / `Ctrl+B`   | Show / hide the sidebar (also the `‹` / `›` button, or drag its edge to the window side) |
+
+Drag the sidebar's edge to resize it. Its width, visibility and the zoom level are remembered.
+
+### Search
+
+| Key                   | Action                              |
+| --------------------- | ----------------------------------- |
+| `Ctrl+K` / `/`        | Open search                         |
+| `Up/Down`             | Move through results                |
+| `Enter`               | Open the selected result            |
+| `F3` / `Shift+F3`     | Next / previous match on the page   |
+| `Esc`                 | Close search, then clear highlights |
+
+## Development
+
+```bash
+# Debug build
+make build
+
+# Run on a path (default: .)
+make run ARGS=testdata/many
+
+# Run tests
+make test
+
+# Formatting check and clippy
+make lint
+
+# Optimized build, packaged into dist/ with a checksum
+make release
+
+# Generate test documents: baseline/, many/ (2,000 files), huge/ (10 MB)
+make testdata
+
+# Clean build artifacts, dist/ and test data
+make clean
+```
+
+## Tech Stack
+
+- [Rust](https://www.rust-lang.org/)
+- [wry](https://github.com/tauri-apps/wry) and [tao](https://github.com/tauri-apps/tao) -- system webview and window
+- [comrak](https://github.com/kivikakk/comrak) -- GitHub-flavoured Markdown
+- [syntect](https://github.com/trishume/syntect) -- syntax highlighting
+- [ammonia](https://github.com/rust-ammonia/ammonia) -- HTML sanitizing
+- [nucleo](https://github.com/helix-editor/nucleo) -- fuzzy matching for search
+- [ignore](https://github.com/BurntSushi/ripgrep/tree/master/crates/ignore) -- `.gitignore`-aware directory walking
+
+## License
+
+[MIT](LICENSE)
