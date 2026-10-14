@@ -14,10 +14,17 @@ links and other files open in their default apps.
 
 The sidebar skips hidden and `.gitignore`d paths.
 
+Search (`Ctrl+K`) matches file names fuzzily and file contents as plain
+text, across the browsed folder (or just the open file). Opening a result
+jumps to the match and highlights every occurrence on the page.
+
 ## Keys
 
 | Key                       | Action                  |
 |---------------------------|-------------------------|
+| `Ctrl+K` / `/`            | Search file names and text |
+| `F3` / `Shift+F3`         | Next / previous match on the page |
+| `Esc`                     | Close search, clear highlights |
 | `F4` / `Ctrl+B`           | Toggle the sidebar      |
 | `Backspace` / `Alt+←`     | Back                    |
 | `Alt+→`                   | Forward                 |

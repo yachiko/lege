@@ -266,6 +266,85 @@ body.resizing, body.resizing * { cursor: col-resize; user-select: none; transiti
 #sidebar .outline a:hover { color: var(--sidebar-ink); }
 #sidebar .outline a.active { color: var(--link); font-weight: 600; }
 
+/* ---------- Search (Ctrl+K) ---------- */
+
+#search {
+  position: fixed;
+  top: 14px;
+  left: 50%;
+  z-index: 10;
+  box-sizing: border-box;
+  width: min(640px, calc(100vw - 32px));
+  overflow: hidden;
+  transform: translateX(-50%);
+  background: var(--paper);
+  border: 1px solid var(--rule-strong);
+  border-radius: 10px;
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.12), 0 14px 44px rgb(0 0 0 / 0.28);
+  font: 14.5px/20px var(--sans);
+}
+#search[hidden] { display: none; }
+
+#search-input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 13px 16px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 16px;
+}
+#search-input::placeholder { color: var(--muted); }
+
+#search-results:not(:empty) {
+  max-height: min(60vh, 520px);
+  overflow: auto;
+  padding: 4px 6px 8px;
+  border-top: 1px solid var(--rule);
+}
+
+#search .section {
+  padding: 10px 10px 4px;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+#search .group {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px 2px;
+  font-weight: 600;
+}
+#search .group .count { color: var(--muted); font-weight: 400; }
+
+#search a.result {
+  display: block;
+  padding: 6px 10px;
+  border-radius: 6px;
+  color: var(--ink);
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: default;
+}
+#search a.hit { padding-left: 22px; color: var(--muted); font-size: 13.5px; }
+#search a.result.selected {
+  background: color-mix(in srgb, var(--link) 16%, transparent);
+  color: var(--ink);
+}
+#search mark { background: none; color: var(--link); font-weight: 650; }
+#search .empty { margin: 0; padding: 12px 16px; color: var(--muted); }
+
+/* Matches on the page after opening a search result; F3 steps through them. */
+mark.hit { background: var(--mark); color: inherit; border-radius: 2px; }
+mark.hit.current { outline: 2px solid var(--link); outline-offset: 1px; }
+
 /* ---------- Document ---------- */
 
 /* Documents arrive in shards. Off-screen shards skip layout and painting,

@@ -8,6 +8,7 @@
 //! `lector://` scheme (see `server`), and `assets/app.js` handles navigation.
 
 mod render;
+mod search;
 mod server;
 mod tree;
 

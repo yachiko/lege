@@ -14,6 +14,7 @@ path = "src/main.rs"
 ammonia = "4.2.3"
 comrak = { version = "0.56.0", default-features = false, features = ["syntect-fancy"] }
 ignore = "0.4.33"
+nucleo-matcher = "0.3.1"
 tao = "0.37.1"
 wry = "0.57.0"
 
