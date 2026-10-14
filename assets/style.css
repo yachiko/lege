@@ -27,7 +27,6 @@
   --sidebar-hover: rgb(0 0 0 / 0.05);
   --sidebar-guide: rgb(0 0 0 / 0.13);
   --sidebar-card: #f5f6f8;
-  --sidebar-card-border: rgb(0 0 0 / 0.08);
   --scroll-thumb: rgb(0 0 0 / 0.22);
 
   --note: #0969da;
@@ -65,7 +64,6 @@
     --sidebar-hover: rgb(255 255 255 / 0.05);
     --sidebar-guide: rgb(255 255 255 / 0.13);
     --sidebar-card: #212226;
-    --sidebar-card-border: rgb(255 255 255 / 0.07);
     --scroll-thumb: rgb(255 255 255 / 0.18);
 
     --note: #4493f8;
@@ -201,11 +199,20 @@ body.resizing, body.resizing * { cursor: col-resize; user-select: none; transiti
   cursor: default;
 }
 
-/* Folders: plain rows with a chevron. */
-#sidebar summary {
+/* Folders and files are plain rows of the same height; a box appears only
+   on hover, or around the open file. Borders are transparent until then. */
+#sidebar summary,
+#sidebar a:not(.heading) {
   margin: 2px 0;
-  padding: 7px 9px;
+  border: 1px solid transparent;
   border-radius: 6px;
+}
+#sidebar summary:hover,
+#sidebar a:not(.heading):hover { background: var(--sidebar-hover); }
+
+/* Folders: a chevron before the name. */
+#sidebar summary {
+  padding: 7px 9px;
   font-weight: 600;
   list-style: none;
 }
@@ -221,7 +228,6 @@ body.resizing, body.resizing * { cursor: col-resize; user-select: none; transiti
   transition: transform 0.12s ease;
 }
 #sidebar details[open] > summary::before { transform: rotate(90deg); }
-#sidebar summary:hover { background: var(--sidebar-hover); }
 
 /* Indent guide: a hairline running down from each open folder's chevron. */
 #sidebar details > ul {
@@ -230,21 +236,14 @@ body.resizing, body.resizing * { cursor: col-resize; user-select: none; transiti
   border-left: 1px solid var(--sidebar-guide);
 }
 
-/* Files: each its own card, so entries stand apart from folders and each other. */
+/* Files: names line up with folder names after the chevron. */
 #sidebar a:not(.heading) {
-  margin: 0 0 4px;
-  padding: 7px 12px;
-  background: var(--sidebar-card);
-  border: 1px solid var(--sidebar-card-border);
-  border-radius: 6px;
+  padding: 7px 10px 7px 22px;
   color: var(--sidebar-muted);
 }
-#sidebar a:not(.heading):hover {
-  border-color: var(--rule-strong);
-  color: var(--sidebar-ink);
-}
+#sidebar a:not(.heading):hover { color: var(--sidebar-ink); }
 
-/* The open file: an accented card. */
+/* The open file: an accented box. */
 #sidebar a[aria-current] {
   background: color-mix(in srgb, var(--link) 14%, var(--sidebar-card));
   border-color: color-mix(in srgb, var(--link) 55%, transparent);
