@@ -1,4 +1,4 @@
-// lector's viewer: in-page navigation, live reload, sidebar, search and keys.
+// The viewer: in-page navigation, live reload, sidebar, search and keys.
 // The page URL is always the open document's path; see src/server.rs.
 (() => {
   'use strict';
@@ -66,7 +66,7 @@
     setFind(findTarget);
     shownPath = url.pathname;
     const name = decode(url.pathname).split('/').pop();
-    document.title = `${name} — lector`;
+    document.title = `${name} — Lege`;
 
     pendingScroll = scroll;
     pendingHash = scroll === null ? url.hash : '';
@@ -306,7 +306,7 @@
     const url = new URL(link.href, location.href);
 
     // Other schemes and non-Markdown files fall through to the native
-    // navigation, which lector hands to the system's default app.
+    // navigation, which Lege hands to the system's default app.
     if (url.origin !== location.origin || !MARKDOWN.test(decode(url.pathname))) return;
     // Same-document #anchors scroll natively.
     if (samePath(url.pathname, location.pathname) && url.hash) return;
@@ -442,7 +442,7 @@
     if (!body.classList.contains('has-sidebar')) return;
     let html;
     try {
-      const response = await fetch('/_lector/tree');
+      const response = await fetch('/_lege/tree');
       if (!response.ok) return;
       html = await response.text();
     } catch {
@@ -550,7 +550,7 @@
       const doc = hasDocument() ? decode(location.pathname) : '';
       try {
         const params = `q=${encodeURIComponent(query)}&doc=${encodeURIComponent(doc)}`;
-        const response = await fetch(`/_lector/search?${params}`);
+        const response = await fetch(`/_lege/search?${params}`);
         if (response.ok) html = await response.text();
       } catch {}
     }

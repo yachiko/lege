@@ -1,6 +1,6 @@
-//! Serves the `lector://` scheme the webview runs on.
+//! Serves the `lege://` scheme the webview runs on.
 //!
-//! A document's URL is its absolute path (`lector://localhost/home/me/notes.md`),
+//! A document's URL is its absolute path (`lege://localhost/home/me/notes.md`),
 //! so relative links and images in the Markdown resolve the way they would on
 //! disk. Routes:
 //!
@@ -10,8 +10,8 @@
 //! - `/path/to/doc.md?shard=N` — shard N; large documents arrive in shards
 //!   (see `render::split`) that the page appends as they come
 //! - `/path/to/doc.md?mtime` — the file's modification time, polled for live reload
-//! - `/_lector/*` — the viewer's own assets, the sidebar tree, and search
-//!   (`/_lector/search?q=…&doc=…`, answered with the results as HTML)
+//! - `/_lege/*` — the viewer's own assets, the sidebar tree, and search
+//!   (`/_lege/search?q=…&doc=…`, answered with the results as HTML)
 //! - any other path — the file's bytes, e.g. images
 //!
 //! Requests are answered off the UI thread (see `main`), and rendered
@@ -31,9 +31,9 @@ use wry::http::{Request, Response, header::CONTENT_TYPE};
 use crate::{render, search, tree};
 
 #[cfg(not(windows))]
-pub const ORIGIN: &str = "lector://localhost";
+pub const ORIGIN: &str = "lege://localhost";
 #[cfg(windows)]
-pub const ORIGIN: &str = "http://lector.localhost";
+pub const ORIGIN: &str = "http://lege.localhost";
 
 const SHELL: &str = include_str!("../assets/shell.html");
 const STYLE: &str = include_str!("../assets/style.css");
@@ -44,7 +44,7 @@ const PREFETCH_MAX_BYTES: u64 = 1024 * 1024;
 
 #[derive(Default)]
 pub struct State {
-    /// The directory shown in the sidebar, if lector is browsing one.
+    /// The directory shown in the sidebar, if Lege is browsing one.
     root: Mutex<Option<PathBuf>>,
     documents: Mutex<HashMap<PathBuf, Arc<Document>>>,
     /// Raw file contents, for search.
@@ -283,10 +283,10 @@ impl State {
 pub fn handle(state: &State, request: &Request<Vec<u8>>) -> Response<Cow<'static, [u8]>> {
     let path = percent_decode(request.uri().path());
     match path.as_str() {
-        "/_lector/style.css" => respond("text/css", STYLE),
-        "/_lector/app.js" => respond("text/javascript", SCRIPT),
-        "/_lector/tree" => respond("text/html", sidebar(state)),
-        "/_lector/search" => {
+        "/_lege/style.css" => respond("text/css", STYLE),
+        "/_lege/app.js" => respond("text/javascript", SCRIPT),
+        "/_lege/tree" => respond("text/html", sidebar(state)),
+        "/_lege/search" => {
             let (mut query, mut doc) = (String::new(), None);
             for pair in request.uri().query().unwrap_or_default().split('&') {
                 match pair.split_once('=') {
@@ -337,11 +337,11 @@ fn shell(state: &State, doc: Option<&Path>) -> String {
     let (title, (content, shards)) = match doc {
         Some(path) => {
             let name = path.file_name().unwrap_or_default().to_string_lossy();
-            (format!("{name} — lector"), first_shard(state, path))
+            (format!("{name} — Lege"), first_shard(state, path))
         }
-        None if has_root => ("lector".to_owned(), (notice("No Markdown files here."), 1)),
+        None if has_root => ("Lege".to_owned(), (notice("No Markdown files here."), 1)),
         None => (
-            "lector".to_owned(),
+            "Lege".to_owned(),
             (notice("Drop a Markdown file or folder here."), 1),
         ),
     };
@@ -543,7 +543,7 @@ mod tests {
 
     #[test]
     fn rerenders_only_when_the_file_changes() {
-        let path = std::env::temp_dir().join(format!("lector-cache-{}.md", std::process::id()));
+        let path = std::env::temp_dir().join(format!("lege-cache-{}.md", std::process::id()));
         let state = State::default();
         let file = |text: &str, secs: u64| {
             std::fs::write(&path, text).unwrap();
@@ -571,7 +571,7 @@ mod tests {
 
     #[test]
     fn opening_a_directory_prefetches_its_small_files() {
-        let root = std::env::temp_dir().join(format!("lector-prefetch-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("lege-prefetch-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(root.join("sub")).unwrap();
         std::fs::write(root.join("a.md"), "# A").unwrap();
@@ -603,7 +603,7 @@ mod tests {
 
     #[test]
     fn large_documents_render_every_shard_in_the_background() {
-        let path = std::env::temp_dir().join(format!("lector-shards-{}.md", std::process::id()));
+        let path = std::env::temp_dir().join(format!("lege-shards-{}.md", std::process::id()));
         let filler = "Words to fill out the chapter.\n\n".repeat(300);
         let text: String = (0..100)
             .map(|i| format!("# Chapter {i}\n\n{filler}"))
@@ -625,7 +625,7 @@ mod tests {
 
     #[test]
     fn searches_names_and_text_with_the_open_document_first() {
-        let root = std::env::temp_dir().join(format!("lector-search-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("lege-search-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(root.join("docs")).unwrap();
         std::fs::write(

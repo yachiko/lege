@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate Markdown test data for lector.
+"""Generate Markdown test data for Lege.
 
     python3 scripts/gen_testdata.py [OUT_DIR] [--huge-mb N]
 
@@ -8,7 +8,7 @@ Creates, under OUT_DIR (default: testdata/):
   baseline/   a realistic project's docs: a handful of normal-sized files,
               nested folders, an image, cross-links
   many/       ~2,000 small files in ~60 folders, including awkward names,
-              a hidden folder and a .gitignored folder that lector should skip
+              a hidden folder and a .gitignored folder that Lege should skip
   huge/       one very large file (default ~10 MB) mixing every element type
 
 Output is deterministic (fixed random seed) and OUT_DIR is wiped first.
@@ -229,7 +229,7 @@ def many(out, w, count=2000):
         write(out / "edge-cases" / name, f"# {Path(name).stem}\n\n{w.paragraph()}")
     write(out / "edge-cases" / "not-markdown.txt", "This file should not appear in the sidebar.")
 
-    # lector skips hidden and .gitignored paths; these must not show up.
+    # Lege skips hidden and .gitignored paths; these must not show up.
     write(out / ".hidden" / "secret.md", "# Hidden\n\nShould not be listed.")
     write(out / "ignored" / "skipped.md", "# Ignored\n\nShould not be listed.")
     (out / ".gitignore").write_text("ignored/\n")

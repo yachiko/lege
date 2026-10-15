@@ -1,11 +1,11 @@
-//! lector — a minimal Markdown viewer and explorer.
+//! Lege — a minimal Markdown viewer and explorer.
 //!
 //! Usage: `lege [FILE.md | DIR]`, or drop a file or folder onto the window.
 //! A directory opens with a sidebar listing its Markdown files. The open file
 //! reloads automatically when it changes on disk.
 //!
 //! The UI is a system webview: Rust renders Markdown and serves it over the
-//! `lector://` scheme (see `server`), and `assets/app.js` handles navigation.
+//! `lege://` scheme (see `server`), and `assets/app.js` handles navigation.
 
 mod render;
 mod search;
@@ -80,7 +80,7 @@ fn main() {
     let proxy = event_loop.create_proxy();
     let window = Rc::new(
         WindowBuilder::new()
-            .with_title("lector")
+            .with_title("Lege")
             .with_inner_size(LogicalSize::new(1000.0, 1100.0))
             .with_min_inner_size(LogicalSize::new(360.0, 300.0))
             .with_window_icon(window_icon())
@@ -96,7 +96,7 @@ fn main() {
     let builder = WebViewBuilder::new()
         // Each request is answered on its own thread: rendering a large
         // document must never block the UI thread the webview runs on.
-        .with_asynchronous_custom_protocol("lector".into(), {
+        .with_asynchronous_custom_protocol("lege".into(), {
             let state = state.clone();
             move |_, request, responder| {
                 let state = state.clone();

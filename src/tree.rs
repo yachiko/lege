@@ -182,7 +182,7 @@ mod tests {
 
     #[test]
     fn builds_sorted_tree_of_markdown_files_only() {
-        let root = std::env::temp_dir().join(format!("lector-tree-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("lege-tree-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         for dir in ["docs/deep", "empty", "assets", ".hidden"] {
             std::fs::create_dir_all(root.join(dir)).unwrap();
