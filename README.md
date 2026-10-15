@@ -98,7 +98,7 @@ On macOS, use `Cmd` instead of `Ctrl`.
 | ----------------- | --------------------------------------------------------------- |
 | `F4` / `Ctrl+B`   | Show / hide the sidebar (also the `‹` / `›` button, or drag its edge to the window side) |
 
-Drag the sidebar's edge to resize it. Its width, visibility and the zoom level are remembered.
+Drag the sidebar's edge to resize it, and either edge of the page to make it wider or narrower (double-click a page edge to go back to the paper's width). Both widths, the sidebar's visibility and the zoom level are remembered.
 
 ### Search
 

@@ -9,6 +9,7 @@
   const body = document.body;
   const page = document.getElementById('page');
   const sidebar = document.getElementById('sidebar');
+  const canvas = document.getElementById('canvas');
   const resizer = document.getElementById('resizer');
 
   // Per-viewer preferences; storage can be unavailable, so never rely on it.
@@ -504,6 +505,71 @@
     resizer.addEventListener('pointercancel', stop, { once: true });
   });
 
+  // ---------- Page width ----------
+  // Dragging either edge of the page widens or narrows it around its centre,
+  // up to the room the window has; double-clicking an edge goes back to the
+  // paper's width. The text under the top of the window stays in place.
+
+  const PAGE_WIDTH = 816;
+
+  function setPageWidth(width) {
+    const clamped = Math.round(Math.max(width, 480));
+    document.documentElement.style.setProperty('--page-width', `${clamped}px`);
+    return clamped;
+  }
+
+  // The block at the reading line, and where it is, so a reflow can put it back.
+  function readingAnchor() {
+    const rect = page.getBoundingClientRect();
+    let el = document.elementFromPoint(rect.left + rect.width / 2, 96);
+    if (!el || el === page || !page.contains(el)) return null;
+    while (el.parentElement !== page && !el.parentElement.classList.contains('shard')) el = el.parentElement;
+    return { el, top: el.getBoundingClientRect().top };
+  }
+
+  function restoreAnchor(anchor) {
+    if (anchor) window.scrollBy(0, anchor.el.getBoundingClientRect().top - anchor.top);
+  }
+
+  for (const edge of document.querySelectorAll('.page-edge')) {
+    const side = edge.classList.contains('left') ? -1 : 1;
+
+    edge.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      edge.setPointerCapture(event.pointerId);
+      body.classList.add('resizing');
+      edge.classList.add('dragging');
+      const start = page.offsetWidth;
+      // Pointer positions are in zoomed pixels; widths are in CSS pixels.
+      const scale = page.getBoundingClientRect().width / start;
+      const padding = getComputedStyle(canvas);
+      const room = canvas.clientWidth - parseFloat(padding.paddingLeft) - parseFloat(padding.paddingRight);
+      const anchor = readingAnchor();
+      let width = start;
+      const move = (e) => {
+        // Both edges move, so the page grows by twice the pointer's travel.
+        width = setPageWidth(Math.min(start + (2 * side * (e.clientX - event.clientX)) / scale, room));
+        restoreAnchor(anchor);
+      };
+      const stop = () => {
+        edge.removeEventListener('pointermove', move);
+        body.classList.remove('resizing');
+        edge.classList.remove('dragging');
+        prefs.set('pageWidth', width);
+      };
+      edge.addEventListener('pointermove', move);
+      edge.addEventListener('pointerup', stop, { once: true });
+      edge.addEventListener('pointercancel', stop, { once: true });
+    });
+
+    edge.addEventListener('dblclick', () => {
+      const anchor = readingAnchor();
+      prefs.set('pageWidth', setPageWidth(PAGE_WIDTH));
+      restoreAnchor(anchor);
+    });
+  }
+
   // ---------- Zoom ----------
 
   let zoom = prefs.get('zoom', 1);
@@ -691,6 +757,7 @@
 
   setZoom(zoom);
   setSidebarWidth(prefs.get('sidebarWidth', 260));
+  setPageWidth(prefs.get('pageWidth', PAGE_WIDTH));
   if (prefs.get('sidebarHidden', false)) body.classList.add('sidebar-hidden');
   markCurrent(true);
   pendingHash = location.hash;
