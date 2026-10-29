@@ -492,6 +492,8 @@
     };
     const stop = () => {
       resizer.removeEventListener('pointermove', move);
+      resizer.removeEventListener('pointerup', stop);
+      resizer.removeEventListener('pointercancel', stop);
       body.classList.remove('resizing');
       if (x < 100) {
         setSidebarWidth(before);
@@ -501,8 +503,8 @@
       }
     };
     resizer.addEventListener('pointermove', move);
-    resizer.addEventListener('pointerup', stop, { once: true });
-    resizer.addEventListener('pointercancel', stop, { once: true });
+    resizer.addEventListener('pointerup', stop);
+    resizer.addEventListener('pointercancel', stop);
   });
 
   // ---------- Page width ----------
@@ -518,11 +520,37 @@
     return clamped;
   }
 
+  // The first child reaching below a line; children are in document order,
+  // so binary search keeps this cheap for shards with thousands of blocks.
+  function childAt(parent, line) {
+    const children = parent.children;
+    let lo = 0;
+    let hi = children.length - 1;
+    let found = null;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (children[mid].getBoundingClientRect().bottom > line) {
+        found = children[mid];
+        hi = mid - 1;
+      } else {
+        lo = mid + 1;
+      }
+    }
+    return found;
+  }
+
   // The block at the reading line, and where it is, so a reflow can put it back.
   function readingAnchor() {
+    const line = 96;
     const rect = page.getBoundingClientRect();
-    let el = document.elementFromPoint(rect.left + rect.width / 2, 96);
-    if (!el || el === page || !page.contains(el)) return null;
+    let el = document.elementFromPoint(rect.left + rect.width / 2, line);
+    if (!el || !page.contains(el)) return null;
+    // Between blocks the point lands on the page or a shard, whose own top
+    // hardly moves in a reflow; take the block just below the line instead.
+    while (el === page || el.classList.contains('shard')) {
+      el = childAt(el, line);
+      if (!el) return null;
+    }
     while (el.parentElement !== page && !el.parentElement.classList.contains('shard')) el = el.parentElement;
     return { el, top: el.getBoundingClientRect().top };
   }
@@ -547,20 +575,37 @@
       const room = canvas.clientWidth - parseFloat(padding.paddingLeft) - parseFloat(padding.paddingRight);
       const anchor = readingAnchor();
       let width = start;
-      const move = (e) => {
+      let x = event.clientX;
+      let frame = 0;
+      // Each width change reflows the whole document, so pointer moves are
+      // applied at most once a frame.
+      const update = () => {
+        frame = 0;
         // Both edges move, so the page grows by twice the pointer's travel.
-        width = setPageWidth(Math.min(start + (2 * side * (e.clientX - event.clientX)) / scale, room));
+        width = setPageWidth(Math.min(start + (2 * side * (x - event.clientX)) / scale, room));
         restoreAnchor(anchor);
+      };
+      const move = (e) => {
+        x = e.clientX;
+        if (!frame) frame = requestAnimationFrame(update);
       };
       const stop = () => {
         edge.removeEventListener('pointermove', move);
+        edge.removeEventListener('pointerup', stop);
+        edge.removeEventListener('pointercancel', stop);
         body.classList.remove('resizing');
         edge.classList.remove('dragging');
-        prefs.set('pageWidth', width);
+        if (frame) {
+          cancelAnimationFrame(frame);
+          update();
+        }
+        // A click without a drag keeps the saved width, which may be wider
+        // than the window currently lets the page be.
+        if (width !== start) prefs.set('pageWidth', width);
       };
       edge.addEventListener('pointermove', move);
-      edge.addEventListener('pointerup', stop, { once: true });
-      edge.addEventListener('pointercancel', stop, { once: true });
+      edge.addEventListener('pointerup', stop);
+      edge.addEventListener('pointercancel', stop);
     });
 
     edge.addEventListener('dblclick', () => {
