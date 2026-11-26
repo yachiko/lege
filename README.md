@@ -3,7 +3,10 @@
 </p>
 
 <h1 align="center">Lege</h1>
-<p align="center"><em><strong>lege</strong> (Latin): "read!". <strong>Tolle, lege</strong>, "take up and read", are the words Augustine heard before he opened the book (Confessions VIII.12).</em></p>
+<table align="center"><tr><td>
+<strong>lege</strong> · <em>Latin, verb</em><br>
+"read!" <em>Tolle, lege</em>, "take up and read", are the words Augustine heard before he opened the book (<em>Confessions</em> VIII.12).
+</td></tr></table>
 <p align="center"><strong>A minimal Markdown viewer and explorer, in the spirit of the PDF viewers of old.</strong></p>
 
 <p align="center">
