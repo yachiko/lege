@@ -3,6 +3,7 @@
 </p>
 
 <h1 align="center">Lege</h1>
+<p align="center"><em><strong>lege</strong> (Latin): "read!". <strong>Tolle, lege</strong>, "take up and read", are the words Augustine heard before he opened the book (Confessions VIII.12).</em></p>
 <p align="center"><strong>A minimal Markdown viewer and explorer, in the spirit of the PDF viewers of old.</strong></p>
 
 <p align="center">
@@ -14,7 +15,7 @@
 
 ---
 
-Lege (Latin for *"read!"*) opens a Markdown file, or a whole folder of them, as a sheet of paper on a grey canvas. A sidebar lists the folder's files and the open document's sections; everything else stays out of the way until you ask for it.
+Lege opens a Markdown file, or a whole folder of them, as a sheet of paper on a grey canvas. A sidebar lists the folder's files and the open document's sections; everything else stays out of the way until you ask for it.
 
 <p align="center">
   <img src="docs/screenshot.png" alt="Lege showing a folder of Markdown files with the sidebar and the open document" width="900">
